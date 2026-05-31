@@ -47,7 +47,10 @@ class App:
             self.main_window.status_label.setText("需要校准...")
             self._run_calibration()
 
-        self.engine.load_calibration(calib_path)
+        if self.engine.has_calibration(calib_path):
+            self.engine.load_calibration(calib_path)
+        else:
+            self.main_window.status_label.setText("校准失败，请重试")
 
         # 定时刷新主界面状态
         self._status_timer = QTimer()

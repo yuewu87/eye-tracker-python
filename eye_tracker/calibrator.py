@@ -4,6 +4,7 @@ import os
 import sys
 import numpy as np
 from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.multioutput import MultiOutputRegressor
 from PySide6.QtWidgets import QApplication, QWidget
 from PySide6.QtCore import Qt, QTimer, QPoint, Signal, QEventLoop
 from PySide6.QtGui import QPainter, QColor, QFont
@@ -175,12 +176,13 @@ class CalibrationWindow(QWidget):
             self.x_std  = X.std(axis=0) + 1e-6
             X_norm = (X - self.x_mean) / self.x_std
 
-            # 梯度提升回归：树模型天然处理非线性映射
-            model = GradientBoostingRegressor(
+            # 梯度提升回归（MultiOutput 包装以支持 x,y 双输出）
+            gbr = GradientBoostingRegressor(
                 n_estimators=100, max_depth=4, learning_rate=0.1,
                 random_state=42)
+            model = MultiOutputRegressor(gbr)
             model.fit(X_norm, y)
-            print(f"[i] GBR 训练完成, R²={model.score(X_norm, y):.3f}")
+            print(f"[i] GBR 训练完成")
 
             screen = QApplication.primaryScreen().geometry()
             save_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration.npz")
