@@ -162,8 +162,8 @@ class GazeEngine(QObject):
         if not self.cap.isOpened():
             print("[!] 无法打开摄像头")
             return
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 
         self.face_mesh = _FaceMesh(
             static_image_mode=False, max_num_faces=1,
