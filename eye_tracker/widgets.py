@@ -149,9 +149,9 @@ class CaptureWindow(QMainWindow):
         self._vy = 0.0
         self._pulse = 0.0
         self._tracking = False
+        self.show()
 
     def paintEvent(self, event):
-        from PySide6.QtGui import QPainter
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         if self._tracking:
