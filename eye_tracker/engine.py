@@ -25,21 +25,39 @@ _FaceMesh = mp.solutions.face_mesh.FaceMesh
 
 
 def extract_features(face_landmarks):
-    """Extract iris-offset features from MediaPipe face landmarks.
+    """Extract 7-D gaze features including head-pose context.
 
-    Returns a 4-element float32 array:
-      [dx_right, dy_right, dx_left, dy_left]
-    representing the offset of each iris centre from the midpoint of its
-    eye corners.
+    Returns float32[7]:
+      [dx_r, dy_r, dx_l, dy_l,  nose_dx, nose_dy, eye_dist]
     """
     lm = face_landmarks.landmark
+
+    # Iris centers
     ri = np.mean([[lm[i].x, lm[i].y] for i in RIGHT_IRIS], axis=0)
+    li = np.mean([[lm[i].x, lm[i].y] for i in LEFT_IRIS], axis=0)
+
+    # Eye centers (midpoint of eye corners)
     re = np.array([(lm[R_EYE_OUTER].x + lm[R_EYE_INNER].x) / 2,
                    (lm[R_EYE_OUTER].y + lm[R_EYE_INNER].y) / 2])
-    li = np.mean([[lm[i].x, lm[i].y] for i in LEFT_IRIS], axis=0)
     le = np.array([(lm[L_EYE_INNER].x + lm[L_EYE_OUTER].x) / 2,
                    (lm[L_EYE_INNER].y + lm[L_EYE_OUTER].y) / 2])
-    return np.concatenate([ri - re, li - le]).astype(np.float32)
+
+    # Face reference: midpoint between the two eyes
+    face_cx = (re[0] + le[0]) / 2
+    face_cy = (re[1] + le[1]) / 2
+    eye_dist = float(np.linalg.norm(re - le))
+
+    # Nose tip (landmark 1) as head-pose proxy
+    nose = np.array([lm[1].x, lm[1].y])
+    nose_dx = nose[0] - face_cx
+    nose_dy = nose[1] - face_cy
+
+    # Iris offsets from eye centers
+    dr = ri - re
+    dl = li - le
+
+    return np.array([dr[0], dr[1], dl[0], dl[1],
+                     nose_dx, nose_dy, eye_dist], dtype=np.float32)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -68,7 +86,7 @@ class GazeEngine(QObject):
         self.prev_gaze_y = screen_h / 2.0
 
         # Smoothing factor (EMA)
-        self.alpha = 0.12
+        self.alpha = 0.18
 
         # Whether a face was detected on the most recent tick
         self.tracking = False
@@ -235,7 +253,7 @@ class GazeEngine(QObject):
             # Dead zone: ignore sub-pixel jitter (< 2 px)
             dx_raw = px - self.gaze_x
             dy_raw = py - self.gaze_y
-            if abs(dx_raw) < 2.0 and abs(dy_raw) < 2.0:
+            if abs(dx_raw) < 1.0 and abs(dy_raw) < 1.0:
                 px = self.gaze_x
                 py = self.gaze_y
 

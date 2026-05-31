@@ -3,7 +3,7 @@
 import os
 import sys
 import numpy as np
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import RidgeCV
 from PySide6.QtWidgets import QApplication, QWidget
 from PySide6.QtCore import Qt, QTimer, QPoint, Signal, QEventLoop
 from PySide6.QtGui import QPainter, QColor, QFont
@@ -11,12 +11,14 @@ from PySide6.QtGui import QPainter, QColor, QFont
 from engine import extract_features
 
 CALIB_POINTS = [
-    (0.1, 0.1), (0.9, 0.1), (0.5, 0.5), (0.1, 0.9), (0.9, 0.9),
+    (0.1, 0.1), (0.5, 0.1), (0.9, 0.1),
+    (0.1, 0.5), (0.5, 0.5), (0.9, 0.5),
+    (0.1, 0.9), (0.5, 0.9), (0.9, 0.9),
 ]
 
-SAMPLES_PER_POINT = 50
+SAMPLES_PER_POINT = 80
 SETTLE_SECONDS = 1.0
-PREP_SECONDS = 2.0
+PREP_SECONDS = 1.5
 
 
 class CalibrationWindow(QWidget):
@@ -173,8 +175,9 @@ class CalibrationWindow(QWidget):
             self.x_std  = X.std(axis=0) + 1e-6
             X_norm = (X - self.x_mean) / self.x_std
 
-            model = Ridge(alpha=0.5)
+            model = RidgeCV(alphas=[0.01, 0.1, 0.5, 1.0, 5.0, 10.0])
             model.fit(X_norm, y)
+            print(f"[i] 最佳 Ridge alpha: {model.alpha_}")
 
             screen = QApplication.primaryScreen().geometry()
             save_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration.npz")
