@@ -133,15 +133,19 @@ class OverlayWindow(QWidget):
 # ═══════════════════════════════════════════════════════════════════
 
 class CaptureWindow(QWidget):
-    """OBS 捕捉用窗口：纯黑背景 + 光圈，色度键抠除黑色即可叠加。"""
+    """OBS 捕捉用窗口：纯黑背景 + 光圈，色度键抠除黑色即可叠加。
+
+    使用普通窗口（非全屏无边框），OBS 窗口捕获后缩放至全屏即可。
+    """
 
     def __init__(self, geo):
         super().__init__()
-        self.setGeometry(geo)
+        self._screen_w = geo.width()
+        self._screen_h = geo.height()
+        # 普通窗口，OBS 能识别
         self.setWindowTitle("Eye Tracker - Capture")
-        self.setWindowFlags(
-            Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint
-        )
+        self.resize(960, 540)
+        self.move(100, 100)
         self.setAutoFillBackground(True)
         self.setStyleSheet("background: #000000;")
         self._gx = geo.width() // 2
@@ -155,7 +159,12 @@ class CaptureWindow(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         if self._tracking:
-            draw_glow(p, self._gx, self._gy, self._vx, self._vy, self._pulse)
+            # 将屏幕坐标缩放到窗口坐标
+            sx = self._gx * (self.width() / self._screen_w)
+            sy = self._gy * (self.height() / self._screen_h)
+            svx = self._vx * (self.width() / self._screen_w)
+            svy = self._vy * (self.height() / self._screen_h)
+            draw_glow(p, sx, sy, svx, svy, self._pulse)
 
     def update_state(self, x, y, vx, vy, pulse, tracking):
         self._gx, self._gy = x, y
