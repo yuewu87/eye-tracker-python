@@ -29,9 +29,9 @@ def win_set_exstyle(hwnd, flags):
 # ═══════════════════════════════════════════════════════════════════
 
 _R = 56                # 光圈基础半径
-_SPEED_THRESH = 20.0   # 速度阈值：只有快速扫视才显示拖尾
-_TAIL_LEN = 0.6        # 拖尾长度系数
-_TAIL_SEG = 4          # 拖尾段数
+_SPEED_THRESH = 15.0   # 速度阈值
+_TAIL_LEN = 0.35       # 拖尾长度系数
+_TAIL_SEG = 3          # 拖尾段数
 
 
 def draw_glow(painter, x, y, vx, vy, pulse):

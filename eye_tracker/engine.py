@@ -124,6 +124,8 @@ class GazeEngine(QObject):
 
         self.gaze_x = screen_w / 2.0
         self.gaze_y = screen_h / 2.0
+        self.prev_x = screen_w / 2.0
+        self.prev_y = screen_h / 2.0
         self.tracking = False
 
         self.cap = None
@@ -230,6 +232,8 @@ class GazeEngine(QObject):
     def reset_position(self):
         self.gaze_x = self.screen_w / 2.0
         self.gaze_y = self.screen_h / 2.0
+        self.prev_x = self.gaze_x
+        self.prev_y = self.gaze_y
         self.kf.reset()
 
     # ── 内部 tick ────────────────────────────────────────────────
@@ -257,8 +261,10 @@ class GazeEngine(QObject):
         else:
             self.tracking = False
 
-        # 速度 = 状态向量中的速度分量
-        vx = self.kf.x[2]
-        vy = self.kf.x[3]
+        # 速度 = 帧间差分（滤波后位置），用于拖尾渲染
+        vx = self.gaze_x - self.prev_x
+        vy = self.gaze_y - self.prev_y
+        self.prev_x = self.gaze_x
+        self.prev_y = self.gaze_y
 
         self.gaze_updated.emit(self.gaze_x, self.gaze_y, vx, vy, self.tracking)
