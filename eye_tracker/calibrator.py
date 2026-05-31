@@ -5,7 +5,7 @@ import sys
 import numpy as np
 from sklearn.linear_model import Ridge
 from PySide6.QtWidgets import QApplication, QWidget
-from PySide6.QtCore import Qt, QTimer, QPoint
+from PySide6.QtCore import Qt, QTimer, QPoint, Signal, QEventLoop
 from PySide6.QtGui import QPainter, QColor, QFont
 
 from engine import extract_features
@@ -20,6 +20,8 @@ PREP_SECONDS = 2.0
 
 
 class CalibrationWindow(QWidget):
+    calibration_done = Signal()
+
     def __init__(self, engine):
         super().__init__()
         self.engine = engine
@@ -109,7 +111,8 @@ class CalibrationWindow(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             self.timer.stop()
-            QApplication.quit()
+            self.close()
+            self.calibration_done.emit()
 
     def _tick(self):
         try:
@@ -145,8 +148,10 @@ class CalibrationWindow(QWidget):
         self.repaint()
 
     def _collect_frame(self):
-        frame, results = self.engine.read_camera()
-        if results is None or not results.multi_face_landmarks:
+        _, results = self.engine.read_camera()
+        if results is None:
+            return
+        if not results.multi_face_landmarks:
             return
         feats = extract_features(results.multi_face_landmarks[0])
         if feats is None:
@@ -161,34 +166,38 @@ class CalibrationWindow(QWidget):
 
         if len(self.samples) < 30:
             print("[!] 样本不足，请重新校准", file=sys.stderr)
-            QApplication.quit()
-            return
+        else:
+            X = np.array([s[0] for s in self.samples], dtype=np.float32)
+            y = np.array([s[1] for s in self.samples], dtype=np.float32)
+            self.x_mean = X.mean(axis=0)
+            self.x_std  = X.std(axis=0) + 1e-6
+            X_norm = (X - self.x_mean) / self.x_std
 
-        X = np.array([s[0] for s in self.samples], dtype=np.float32)
-        y = np.array([s[1] for s in self.samples], dtype=np.float32)
-        self.x_mean = X.mean(axis=0)
-        self.x_std  = X.std(axis=0) + 1e-6
-        X_norm = (X - self.x_mean) / self.x_std
+            model = Ridge(alpha=0.5)
+            model.fit(X_norm, y)
 
-        model = Ridge(alpha=0.5)
-        model.fit(X_norm, y)
+            screen = QApplication.primaryScreen().geometry()
+            save_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration.npz")
+            np.savez(save_path,
+                     coef=model.coef_.astype(np.float32),
+                     intercept=model.intercept_.astype(np.float32),
+                     x_mean=self.x_mean.astype(np.float32),
+                     x_std=self.x_std.astype(np.float32),
+                     screen_w=screen.width(),
+                     screen_h=screen.height())
+            print(f"[OK] 校准参数已保存: {save_path}")
+            print(f"     样本数: {len(self.samples)}, 屏幕: {screen.width()}x{screen.height()}")
 
-        screen = QApplication.primaryScreen().geometry()
-        save_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration.npz")
-        np.savez(save_path,
-                 coef=model.coef_.astype(np.float32),
-                 intercept=model.intercept_.astype(np.float32),
-                 x_mean=self.x_mean.astype(np.float32),
-                 x_std=self.x_std.astype(np.float32),
-                 screen_w=screen.width(),
-                 screen_h=screen.height())
-        print(f"[OK] 校准参数已保存: {save_path}")
-        print(f"     样本数: {len(self.samples)}, 屏幕: {screen.width()}x{screen.height()}")
+        self.close()
+        self.calibration_done.emit()
 
 
 def run_calibration(engine):
-    app = QApplication(sys.argv)
+    """Run fullscreen calibration. Blocks until done. Returns 0 on success."""
     window = CalibrationWindow(engine)
-    sys.exit(app.exec())
+    loop = QEventLoop()
+    window.calibration_done.connect(loop.quit)
+    loop.exec()
+    return 0
 
 
