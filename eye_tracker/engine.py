@@ -2,6 +2,12 @@
 
 import math
 import os
+import sys
+
+# 必须在 import mediapipe 之前设置以屏蔽日志
+os.environ.setdefault("GLOG_minloglevel", "3")
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
+
 import cv2
 import mediapipe as mp
 import numpy as np

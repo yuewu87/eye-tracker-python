@@ -288,8 +288,8 @@ class CenterCalibWindow(QWidget):
         model = calib["model"].item()
         screen_w = float(calib["screen_w"])
         screen_h = float(calib["screen_h"])
-        scale_x = engine.screen_w / screen_w
-        scale_y = engine.screen_h / screen_h
+        scale_x = self.engine.screen_w / screen_w
+        scale_y = self.engine.screen_h / screen_h
 
         pred = model.predict(X_norm)[0]
         pred[0] *= scale_x
