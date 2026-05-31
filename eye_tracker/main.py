@@ -66,9 +66,11 @@ class App:
         self.capture = CaptureWindow(screen_geo)
         self.engine.reset_position()
         self.tracking_active = True
-        self.overlay_visible = True
+        self.overlay_visible = False
         self.main_window.set_tracking_active(True)
         self.engine.gaze_updated.connect(self._on_gaze)
+        QApplication.processEvents()
+        self._toggle_overlay()
 
     def _stop_tracking(self):
         self.engine.gaze_updated.disconnect(self._on_gaze)
