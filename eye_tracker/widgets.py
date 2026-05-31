@@ -28,14 +28,14 @@ def win_set_exstyle(hwnd, flags):
 # 光圈渲染
 # ═══════════════════════════════════════════════════════════════════
 
-_R = 56                # 光圈基础半径（白芯）
+_R = 56                # 光圈基础半径
 _SPEED_THRESH = 8.0    # 速度阈值：大幅移动才显示拖尾
 _TAIL_LEN = 0.6        # 拖尾长度系数
 _TAIL_SEG = 4          # 拖尾段数
 
 
 def draw_glow(painter, x, y, vx, vy, pulse):
-    """彗星式光圈：白芯 + 紫色外发光 + 移动时拖尾。"""
+    """空心圆环光圈：白环 + 紫色外发光 + 移动时彗星拖尾。"""
     speed = math.hypot(vx, vy)
 
     painter.save()
@@ -44,8 +44,8 @@ def draw_glow(painter, x, y, vx, vy, pulse):
     glow_r = _R * 2.0
     g = QRadialGradient(QPointF(x, y), _R, QPointF(x, y), glow_r)
     g.setColorAt(0.0, QColor(255, 255, 255, 0))      # 内圈无发光
-    g.setColorAt(0.2, QColor(180, 120, 255, 40))      # 淡紫过渡
-    g.setColorAt(0.5, QColor(140, 60, 220, 25))       # 紫色扩散
+    g.setColorAt(0.15, QColor(200, 140, 255, 50))     # 淡紫过渡
+    g.setColorAt(0.4, QColor(140, 60, 220, 30))       # 紫色扩散
     g.setColorAt(1.0, QColor(0, 0, 0, 0))             # 边缘消失
     painter.setBrush(QBrush(g))
     painter.setPen(Qt.NoPen)
@@ -54,31 +54,33 @@ def draw_glow(painter, x, y, vx, vy, pulse):
     # ── 拖尾 — 大幅度移动时显示 ──────────────────────────────
     if speed > _SPEED_THRESH:
         tail_len = speed * _TAIL_LEN
-        nx = -vx / speed  # 速度反方向（拖尾方向）
+        nx = -vx / speed  # 速度反方向
         ny = -vy / speed
 
         for i in range(_TAIL_SEG):
-            t = (i + 1) / _TAIL_SEG                     # 0..1
+            t = (i + 1) / _TAIL_SEG
             tx = x + nx * tail_len * t
             ty = y + ny * tail_len * t
-            # 拖尾越远越大、越透明
-            seg_r = _R + _R * t * 0.8
-            alpha = int(80 * (1.0 - t))
-            c = QColor(160, 100, 240, alpha)
-            painter.setBrush(QBrush(c))
-            painter.setPen(Qt.NoPen)
+            seg_r = _R + _R * t * 0.6
+            alpha = int(100 * (1.0 - t))
+            pen = QPen(QColor(160, 100, 240, alpha), 3)
+            pen.setCapStyle(Qt.RoundCap)
+            painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
             painter.drawEllipse(QPointF(tx, ty), seg_r, seg_r)
 
-    # ── 白色核心 — 醒目圆点 ────────────────────────────────
-    core_r = _R
-    g_core = QRadialGradient(QPointF(x, y), core_r)
-    g_core.setColorAt(0.0, QColor(255, 255, 255, 255))
-    g_core.setColorAt(0.3, QColor(255, 255, 255, 230))
-    g_core.setColorAt(0.6, QColor(220, 200, 255, 120))
-    g_core.setColorAt(1.0, QColor(180, 140, 240, 0))
-    painter.setBrush(QBrush(g_core))
-    painter.setPen(Qt.NoPen)
-    painter.drawEllipse(QPointF(x, y), core_r, core_r)
+    # ── 主环 — 白→紫渐变空心圆环 ────────────────────────────
+    pen_main = QPen(QColor(255, 255, 255, 240), 5)
+    pen_main.setCapStyle(Qt.RoundCap)
+    painter.setPen(pen_main)
+    painter.setBrush(Qt.NoBrush)
+    painter.drawEllipse(QPointF(x, y), _R, _R)
+
+    # 内圈淡紫高光环
+    pen_inner = QPen(QColor(200, 160, 255, 120), 2)
+    pen_inner.setCapStyle(Qt.RoundCap)
+    painter.setPen(pen_inner)
+    painter.drawEllipse(QPointF(x, y), _R - 3, _R - 3)
 
     painter.restore()
 
