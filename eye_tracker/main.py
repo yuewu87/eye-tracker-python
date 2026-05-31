@@ -2,6 +2,11 @@
 
 import os
 import sys
+
+# 屏蔽 MediaPipe / TensorFlow 内部日志
+os.environ["GLOG_minloglevel"] = "3"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
 import numpy as np
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt, QTimer
