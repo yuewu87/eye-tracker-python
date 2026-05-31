@@ -95,6 +95,9 @@ class GazeEngine(QObject):
     def start_camera(self):
         """Open the default camera and initialise MediaPipe FaceMesh."""
         self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        if not self.cap.isOpened():
+            print("Warning: camera could not be opened")
+            return
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
@@ -156,7 +159,7 @@ class GazeEngine(QObject):
         pred = self.coef @ x_norm + self.intercept
         pred[0] *= self.scale_x
         pred[1] *= self.scale_y
-        return float(pred[0]), float(pred[1])
+        return float(np.clip(pred[0], 0, self.screen_w)), float(np.clip(pred[1], 0, self.screen_h))
 
     # ── Single-frame camera read (also used by calibrator) ─────────
 
@@ -204,7 +207,10 @@ class GazeEngine(QObject):
         """Periodic callback: read camera, predict, smooth, emit."""
         _, results = self.read_camera()
         if results is None:
-            # The read may have failed; don't change state
+            # The read may have failed; don't change state.
+            # Emit with zero velocity and tracking=False every tick.
+            self.tracking = False
+            self.gaze_updated.emit(self.gaze_x, self.gaze_y, 0.0, 0.0, False)
             return
 
         if results.multi_face_landmarks:
