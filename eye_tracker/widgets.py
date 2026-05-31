@@ -25,12 +25,27 @@ def win_set_exstyle(hwnd, flags):
 # Aperture renderer
 # ═══════════════════════════════════════════════════════════════════
 
+# ── Cached gradient objects for draw_glow (constructed once for perf) ──
+_GLOW_RADIUS = 42
+_GLOW_OUTER_GRADIENT = QRadialGradient(QPointF(0, 0), _GLOW_RADIUS + 16)
+_GLOW_OUTER_GRADIENT.setColorAt(0.7, QColor(0, 200, 255, 25))
+_GLOW_OUTER_GRADIENT.setColorAt(0.85, QColor(0, 160, 255, 12))
+_GLOW_OUTER_GRADIENT.setColorAt(1.0, QColor(0, 0, 0, 0))
+
+_GLOW_RING_GRADIENT = QConicalGradient(QPointF(0, 0), 0)
+_GLOW_RING_GRADIENT.setColorAt(0.00, QColor(0, 240, 255, 230))
+_GLOW_RING_GRADIENT.setColorAt(0.25, QColor(80, 180, 255, 200))
+_GLOW_RING_GRADIENT.setColorAt(0.50, QColor(0, 255, 200, 240))
+_GLOW_RING_GRADIENT.setColorAt(0.75, QColor(80, 180, 255, 200))
+_GLOW_RING_GRADIENT.setColorAt(1.00, QColor(0, 240, 255, 230))
+
+
 def draw_glow(painter, x, y, vx, vy, pulse):
     """Hollow ring aperture with velocity-based fluid deformation.
 
     When moving, the ring stretches along the velocity vector like a droplet.
     """
-    r = 42
+    r = _GLOW_RADIUS
     speed = math.hypot(vx, vy)
 
     # Compute deformation
@@ -45,25 +60,16 @@ def draw_glow(painter, x, y, vx, vy, pulse):
     painter.rotate(angle)
     painter.scale(stretch, inv_stretch)
 
-    # Outer soft glow
-    g_out = QRadialGradient(QPointF(0, 0), r + 16)
-    g_out.setColorAt(0.7, QColor(0, 200, 255, 25))
-    g_out.setColorAt(0.85, QColor(0, 160, 255, 12))
-    g_out.setColorAt(1.0, QColor(0, 0, 0, 0))
-    painter.setBrush(QBrush(g_out))
+    # Outer soft glow (reuses cached gradient)
+    painter.setBrush(QBrush(_GLOW_OUTER_GRADIENT))
     painter.setPen(Qt.NoPen)
     painter.drawEllipse(QPointF(0, 0), r + 16, r + 16)
 
-    # Main ring — hollow, conical gradient
+    # Main ring — hollow, conical gradient (reuses cached gradient, angle updated per frame)
     rot = pulse * 45
-    grad = QConicalGradient(QPointF(0, 0), rot)
-    grad.setColorAt(0.00, QColor(0, 240, 255, 230))
-    grad.setColorAt(0.25, QColor(80, 180, 255, 200))
-    grad.setColorAt(0.50, QColor(0, 255, 200, 240))
-    grad.setColorAt(0.75, QColor(80, 180, 255, 200))
-    grad.setColorAt(1.00, QColor(0, 240, 255, 230))
+    _GLOW_RING_GRADIENT.setAngle(rot)
 
-    pen = QPen(QBrush(grad), 6)
+    pen = QPen(QBrush(_GLOW_RING_GRADIENT), 6)
     pen.setCapStyle(Qt.RoundCap)
     painter.setPen(pen)
     painter.setBrush(Qt.NoBrush)
@@ -127,7 +133,7 @@ class OverlayWindow(QWidget):
         self._vx, self._vy = vx, vy
         self._pulse = pulse
         self._tracking = tracking
-        self.repaint()
+        self.update()
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -162,7 +168,7 @@ class CaptureWindow(QWidget):
         self._vx, self._vy = vx, vy
         self._pulse = pulse
         self._tracking = tracking
-        self.repaint()
+        self.update()
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -183,6 +189,7 @@ class MainWindow(QWidget):
         self.setFixedSize(340, 280)
         self.setWindowFlags(Qt.WindowCloseButtonHint | Qt.WindowStaysOnTopHint)
         self.setStyleSheet("background: #1a1a1a;")
+        self._prev_tracking = None
 
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 16, 20, 16)
@@ -292,6 +299,12 @@ class MainWindow(QWidget):
         self.setLayout(layout)
 
     def update_status(self, tracking, gaze_x, gaze_y):
+        if tracking == self._prev_tracking:
+            # Only update coordinates text (stylesheets unchanged)
+            if tracking:
+                self.coord_label.setText(f"视线: ({int(gaze_x)}, {int(gaze_y)})")
+            return
+        self._prev_tracking = tracking
         if tracking:
             self.led.setStyleSheet("color: #0f8; font-size: 18px;")
             self.status_label.setText("追踪中")
