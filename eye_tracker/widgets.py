@@ -28,44 +28,57 @@ def win_set_exstyle(hwnd, flags):
 # 光圈渲染
 # ═══════════════════════════════════════════════════════════════════
 
-_R = 28                # 光圈基础半径
-_SPEED_THRESH = 3.0    # 速度阈值：低于此值保持正圆
-_MAX_STRETCH = 1.5     # 最大拉伸比例
+_R = 56                # 光圈基础半径（白芯）
+_SPEED_THRESH = 8.0    # 速度阈值：大幅移动才显示拖尾
+_TAIL_LEN = 0.6        # 拖尾长度系数
+_TAIL_SEG = 4          # 拖尾段数
 
 
 def draw_glow(painter, x, y, vx, vy, pulse):
-    """空心圆环 + 外发光。快速移动时沿速度方向拉伸成椭圆。"""
+    """彗星式光圈：白芯 + 紫色外发光 + 移动时拖尾。"""
     speed = math.hypot(vx, vy)
 
-    if speed > _SPEED_THRESH:
-        stretch = min(1.0 + speed * 0.04, _MAX_STRETCH)
-        angle = math.degrees(math.atan2(vy, vx))
-        painter.save()
-        painter.translate(x, y)
-        painter.rotate(angle)
-        painter.scale(stretch, 1.0 / stretch)
-        cx, cy = 0.0, 0.0
-    else:
-        painter.save()
-        painter.translate(x, y)
-        cx, cy = 0.0, 0.0
+    painter.save()
 
-    # 外发光
-    glow_r = _R + 16
-    g = QRadialGradient(QPointF(cx, cy), glow_r)
-    g.setColorAt(0.6, QColor(0, 200, 255, 40))
-    g.setColorAt(0.8, QColor(0, 160, 255, 15))
-    g.setColorAt(1.0, QColor(0, 0, 0, 0))
+    # ── 紫色外发光（仅向外扩散） ──────────────────────────────
+    glow_r = _R * 2.0
+    g = QRadialGradient(QPointF(x, y), _R, QPointF(x, y), glow_r)
+    g.setColorAt(0.0, QColor(255, 255, 255, 0))      # 内圈无发光
+    g.setColorAt(0.2, QColor(180, 120, 255, 40))      # 淡紫过渡
+    g.setColorAt(0.5, QColor(140, 60, 220, 25))       # 紫色扩散
+    g.setColorAt(1.0, QColor(0, 0, 0, 0))             # 边缘消失
     painter.setBrush(QBrush(g))
     painter.setPen(Qt.NoPen)
-    painter.drawEllipse(QPointF(cx, cy), glow_r, glow_r)
+    painter.drawEllipse(QPointF(x, y), glow_r, glow_r)
 
-    # 空心圆环
-    pen = QPen(QColor(0, 220, 255, 230), 4)
-    pen.setCapStyle(Qt.RoundCap)
-    painter.setPen(pen)
-    painter.setBrush(Qt.NoBrush)
-    painter.drawEllipse(QPointF(cx, cy), _R, _R)
+    # ── 拖尾 — 大幅度移动时显示 ──────────────────────────────
+    if speed > _SPEED_THRESH:
+        tail_len = speed * _TAIL_LEN
+        nx = -vx / speed  # 速度反方向（拖尾方向）
+        ny = -vy / speed
+
+        for i in range(_TAIL_SEG):
+            t = (i + 1) / _TAIL_SEG                     # 0..1
+            tx = x + nx * tail_len * t
+            ty = y + ny * tail_len * t
+            # 拖尾越远越大、越透明
+            seg_r = _R + _R * t * 0.8
+            alpha = int(80 * (1.0 - t))
+            c = QColor(160, 100, 240, alpha)
+            painter.setBrush(QBrush(c))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(QPointF(tx, ty), seg_r, seg_r)
+
+    # ── 白色核心 — 醒目圆点 ────────────────────────────────
+    core_r = _R
+    g_core = QRadialGradient(QPointF(x, y), core_r)
+    g_core.setColorAt(0.0, QColor(255, 255, 255, 255))
+    g_core.setColorAt(0.3, QColor(255, 255, 255, 230))
+    g_core.setColorAt(0.6, QColor(220, 200, 255, 120))
+    g_core.setColorAt(1.0, QColor(180, 140, 240, 0))
+    painter.setBrush(QBrush(g_core))
+    painter.setPen(Qt.NoPen)
+    painter.drawEllipse(QPointF(x, y), core_r, core_r)
 
     painter.restore()
 
