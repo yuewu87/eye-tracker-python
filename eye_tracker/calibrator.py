@@ -3,20 +3,12 @@
 import os
 import sys
 import numpy as np
-import cv2
-import mediapipe as mp
 from sklearn.linear_model import Ridge
 from PySide6.QtWidgets import QApplication, QWidget
 from PySide6.QtCore import Qt, QTimer, QPoint
 from PySide6.QtGui import QPainter, QColor, QFont
 
-# ── MediaPipe setup ──────────────────────────────────────────────
-FaceMesh = mp.solutions.face_mesh.FaceMesh
-
-RIGHT_IRIS  = [468, 469, 470, 471, 472]
-LEFT_IRIS   = [473, 474, 475, 476, 477]
-R_EYE_OUTER, R_EYE_INNER = 33, 133
-L_EYE_INNER, L_EYE_OUTER = 362, 263
+from eye_tracker.engine import extract_features
 
 CALIB_POINTS = [
     (0.1, 0.1), (0.9, 0.1), (0.5, 0.5), (0.1, 0.9), (0.9, 0.9),
@@ -28,8 +20,9 @@ PREP_SECONDS = 2.0
 
 
 class CalibrationWindow(QWidget):
-    def __init__(self):
+    def __init__(self, engine):
         super().__init__()
+        self.engine = engine
         print("[i] 正在初始化校准...")
 
         screen = QApplication.primaryScreen().geometry()
@@ -48,25 +41,6 @@ class CalibrationWindow(QWidget):
         self.phase_timer = 0.0
         self.collected = 0
         self.samples = []
-
-        print("[i] 打开摄像头...")
-        self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-        if not self.cap.isOpened():
-            print("[!] 无法打开摄像头")
-            sys.exit(1)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        print("[i] 摄像头已打开")
-
-        print("[i] 加载 MediaPipe FaceMesh...")
-        self.face_mesh = FaceMesh(
-            static_image_mode=False,
-            max_num_faces=1,
-            refine_landmarks=True,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5,
-        )
-        print("[i] MediaPipe 已就绪")
 
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
@@ -135,8 +109,6 @@ class CalibrationWindow(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             self.timer.stop()
-            if self.cap.isOpened():
-                self.cap.release()
             QApplication.quit()
 
     def _tick(self):
@@ -173,15 +145,10 @@ class CalibrationWindow(QWidget):
         self.repaint()
 
     def _collect_frame(self):
-        ret, frame = self.cap.read()
-        if not ret:
+        frame, results = self.engine.read_camera()
+        if results is None or not results.multi_face_landmarks:
             return
-        frame = cv2.flip(frame, 1)
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = self.face_mesh.process(rgb)
-        if not results.multi_face_landmarks:
-            return
-        feats = self._extract_features(results.multi_face_landmarks[0])
+        feats = extract_features(results.multi_face_landmarks[0])
         if feats is None:
             return
         px, py = CALIB_POINTS[self.current_idx]
@@ -189,20 +156,8 @@ class CalibrationWindow(QWidget):
         self.samples.append((feats, target))
         self.collected += 1
 
-    def _extract_features(self, face_landmarks):
-        lm = face_landmarks.landmark
-        ri = np.mean([[lm[i].x, lm[i].y] for i in RIGHT_IRIS], axis=0)
-        re = np.array([(lm[R_EYE_OUTER].x + lm[R_EYE_INNER].x) / 2,
-                       (lm[R_EYE_OUTER].y + lm[R_EYE_INNER].y) / 2])
-        li = np.mean([[lm[i].x, lm[i].y] for i in LEFT_IRIS], axis=0)
-        le = np.array([(lm[L_EYE_INNER].x + lm[L_EYE_OUTER].x) / 2,
-                       (lm[L_EYE_INNER].y + lm[L_EYE_OUTER].y) / 2])
-        return np.concatenate([ri - re, li - le]).astype(np.float32)
-
     def _finish(self):
         self.timer.stop()
-        self.cap.release()
-        self.face_mesh.close()
 
         if len(self.samples) < 30:
             print("[!] 样本不足，请重新校准", file=sys.stderr)
@@ -231,11 +186,15 @@ class CalibrationWindow(QWidget):
         print(f"     样本数: {len(self.samples)}, 屏幕: {screen.width()}x{screen.height()}")
 
 
-def run_calibration():
+def run_calibration(engine):
     app = QApplication(sys.argv)
-    window = CalibrationWindow()
+    window = CalibrationWindow(engine)
     sys.exit(app.exec())
 
 
 if __name__ == "__main__":
-    run_calibration()
+    from eye_tracker.engine import GazeEngine
+    screen = QApplication.primaryScreen().geometry() if QApplication.instance() else (1920, 1080)
+    eng = GazeEngine(1920, 1080)
+    eng.start_camera()
+    run_calibration(eng)
