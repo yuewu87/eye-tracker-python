@@ -1,23 +1,17 @@
-"""GazeEngine — QObject-based gaze tracking engine.
-
-Owns the camera, MediaPipe FaceMesh, and calibration model.
-Emits gaze data at ~30 Hz for use by the main overlay and calibrator.
-"""
+"""视线追踪引擎 — 封装摄像头、MediaPipe 人脸网格、校准模型和平滑滤波。"""
 
 import os
-
 import cv2
 import mediapipe as mp
 import numpy as np
 from PySide6.QtCore import QObject, Signal, QTimer
 
-
 # ═══════════════════════════════════════════════════════════════════
-# Shared iris landmark indices
+# MediaPipe 虹膜关键点索引
 # ═══════════════════════════════════════════════════════════════════
 
-RIGHT_IRIS = [468, 469, 470, 471, 472]
-LEFT_IRIS = [473, 474, 475, 476, 477]
+RIGHT_IRIS  = [468, 469, 470, 471, 472]
+LEFT_IRIS   = [473, 474, 475, 476, 477]
 R_EYE_OUTER, R_EYE_INNER = 33, 133
 L_EYE_INNER, L_EYE_OUTER = 362, 263
 
@@ -25,34 +19,34 @@ _FaceMesh = mp.solutions.face_mesh.FaceMesh
 
 
 def extract_features(face_landmarks):
-    """Extract 7-D gaze features including head-pose context.
+    """从 MediaPipe 人脸关键点提取 7 维视线特征。
 
-    Returns float32[7]:
-      [dx_r, dy_r, dx_l, dy_l,  nose_dx, nose_dy, eye_dist]
+    返回 float32[7]:
+      [右眼虹膜偏移 x, y, 左眼虹膜偏移 x, y, 鼻尖偏移 x, 鼻尖偏移 y, 眼距]
     """
     lm = face_landmarks.landmark
 
-    # Iris centers
+    # 虹膜中心
     ri = np.mean([[lm[i].x, lm[i].y] for i in RIGHT_IRIS], axis=0)
     li = np.mean([[lm[i].x, lm[i].y] for i in LEFT_IRIS], axis=0)
 
-    # Eye centers (midpoint of eye corners)
+    # 眼睛中心（内外眼角中点）
     re = np.array([(lm[R_EYE_OUTER].x + lm[R_EYE_INNER].x) / 2,
-                   (lm[R_EYE_OUTER].y + lm[R_EYE_INNER].y) / 2])
+                    (lm[R_EYE_OUTER].y + lm[R_EYE_INNER].y) / 2])
     le = np.array([(lm[L_EYE_INNER].x + lm[L_EYE_OUTER].x) / 2,
-                   (lm[L_EYE_INNER].y + lm[L_EYE_OUTER].y) / 2])
+                    (lm[L_EYE_INNER].y + lm[L_EYE_OUTER].y) / 2])
 
-    # Face reference: midpoint between the two eyes
+    # 脸部参考点：双眼连线中点
     face_cx = (re[0] + le[0]) / 2
     face_cy = (re[1] + le[1]) / 2
     eye_dist = float(np.linalg.norm(re - le))
 
-    # Nose tip (landmark 1) as head-pose proxy
+    # 鼻尖（关键点 1）用于估计头部朝向
     nose = np.array([lm[1].x, lm[1].y])
     nose_dx = nose[0] - face_cx
     nose_dy = nose[1] - face_cy
 
-    # Iris offsets from eye centers
+    # 虹膜相对眼睛中心的偏移
     dr = ri - re
     dl = li - le
 
@@ -61,41 +55,39 @@ def extract_features(face_landmarks):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# GazeEngine
+# 追踪引擎
 # ═══════════════════════════════════════════════════════════════════
 
-
 class GazeEngine(QObject):
-    """QObject that encapsulates camera capture, face-mesh inference,
-    calibration prediction, and EMA-smoothed gaze output."""
+    """封装摄像头采集、人脸检测、校准预测和 EMA 平滑的 QObject。
+
+    每帧通过 gaze_updated 信号发出 (x, y, vx, vy, tracking)。
+    """
 
     gaze_updated = Signal(float, float, float, float, bool)
-    """(gaze_x, gaze_y, velocity_x, velocity_y, tracking)"""
-
-    # ── Lifecycle ──────────────────────────────────────────────────
 
     def __init__(self, screen_w: int, screen_h: int):
         super().__init__()
         self.screen_w = screen_w
         self.screen_h = screen_h
 
-        # Smoothed gaze position (init at centre)
+        # 平滑后的视线位置（初始在屏幕中央）
         self.gaze_x = screen_w / 2.0
         self.gaze_y = screen_h / 2.0
         self.prev_gaze_x = screen_w / 2.0
         self.prev_gaze_y = screen_h / 2.0
 
-        # Smoothing factor (EMA)
+        # EMA 平滑系数（0.01=极平滑, 0.5=极灵敏）
         self.alpha = 0.18
 
-        # Whether a face was detected on the most recent tick
+        # 当前帧是否检测到人脸
         self.tracking = False
 
-        # Camera / MediaPipe (created by start_camera)
+        # 摄像头和 MediaPipe 实例
         self.cap = None
         self.face_mesh = None
 
-        # Calibration (loaded by load_calibration)
+        # 校准参数
         self.coef = None
         self.intercept = None
         self.x_mean = None
@@ -104,17 +96,17 @@ class GazeEngine(QObject):
         self.scale_y = 1.0
         self._has_calib = False
 
-        # Internal tick timer
+        # 定时器
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
 
-    # ── Camera control ─────────────────────────────────────────────
+    # ── 摄像头管理 ──────────────────────────────────────────────
 
     def start_camera(self):
-        """Open the default camera and initialise MediaPipe FaceMesh."""
+        """打开默认摄像头并初始化 MediaPipe FaceMesh。"""
         self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
         if not self.cap.isOpened():
-            print("Warning: camera could not be opened")
+            print("[!] 无法打开摄像头")
             return
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
@@ -130,15 +122,15 @@ class GazeEngine(QObject):
         self.timer.start(33)  # ~30 fps
 
     def pause(self):
-        """Stop the tick timer but keep camera and face_mesh alive (for calibration)."""
+        """暂停追踪 tick，保持摄像头和 face_mesh 存活（供校准使用）。"""
         self.timer.stop()
 
     def resume(self):
-        """Restart the tick timer after pause()."""
+        """恢复追踪 tick。"""
         self.timer.start(33)
 
     def stop_camera(self):
-        """Stop the tick timer and release camera / MediaPipe resources."""
+        """停止 tick 并释放摄像头和 MediaPipe 资源。"""
         self.timer.stop()
         if self.cap is not None:
             if self.cap.isOpened():
@@ -149,29 +141,25 @@ class GazeEngine(QObject):
             self.face_mesh = None
 
     def is_camera_ok(self) -> bool:
-        """Return whether the camera is currently open and readable."""
+        """摄像头是否正常打开。"""
         return self.cap is not None and self.cap.isOpened()
 
-    # ── Calibration loading ────────────────────────────────────────
+    # ── 校准文件加载 ────────────────────────────────────────────
 
     @staticmethod
     def has_calibration(path: str) -> bool:
-        """Return True if a calibration file exists at *path*."""
+        """校准文件是否存在。"""
         return os.path.exists(path)
 
     def load_calibration(self, path: str):
-        """Load a calibration.npz file and compute screen-ratio scales.
-
-        The file must contain keys: coef, intercept, x_mean, x_std,
-        screen_w, screen_h.
-        """
+        """加载 calibration.npz 并计算屏幕缩放比例。"""
         calib = np.load(path)
         self.coef = calib["coef"]
         self.intercept = calib["intercept"]
         self.x_mean = calib["x_mean"]
         self.x_std = calib["x_std"]
 
-        # Validate feature dimension
+        # 校验特征维度
         n_features = len(self.x_mean)
         if n_features != 7:
             print(f"[!] 校准文件特征维度不匹配 ({n_features} != 7)，请重新校准")
@@ -185,26 +173,18 @@ class GazeEngine(QObject):
         self._has_calib = True
 
     def predict(self, features: np.ndarray):
-        """Apply the calibration model to a feature vector.
-
-        Returns (x, y) gaze point in screen coordinates.
-        """
+        """将特征向量映射为屏幕坐标 (x, y)。"""
         x_norm = (features - self.x_mean) / self.x_std
         pred = self.coef @ x_norm + self.intercept
         pred[0] *= self.scale_x
         pred[1] *= self.scale_y
-        return float(np.clip(pred[0], 0, self.screen_w)), float(np.clip(pred[1], 0, self.screen_h))
+        return (float(np.clip(pred[0], 0, self.screen_w)),
+                float(np.clip(pred[1], 0, self.screen_h)))
 
-    # ── Single-frame camera read (also used by calibrator) ─────────
+    # ── 单帧读取（校准模块也使用此方法） ────────────────────────
 
     def read_camera(self):
-        """Read and process one camera frame.
-
-        Returns (bgr_frame, results_or_None).
-        The BGR frame is flipped horizontally (mirror view).
-        ``results`` is the MediaPipe face-mesh output, or None if no
-        face was detected or the read failed.
-        """
+        """读取并处理一帧画面，返回 (bgr_frame, results_or_None)。"""
         if not self.is_camera_ok():
             return None, None
 
@@ -218,31 +198,25 @@ class GazeEngine(QObject):
         results = self.face_mesh.process(rgb)
         return frame, results
 
-    # ── Smoothing helpers ──────────────────────────────────────────
+    # ── 平滑参数 ─────────────────────────────────────────────────
 
     def set_smoothing(self, alpha: float):
-        """Set the EMA smoothing factor (clamped to [0.01, 0.5]).
-
-        Lower values = smoother / more laggy.
-        Higher values = more responsive / more jittery.
-        """
+        """设置 EMA 平滑系数，自动钳制到 [0.01, 0.5]。"""
         self.alpha = max(0.01, min(0.5, alpha))
 
     def reset_position(self):
-        """Reset the gaze position to the centre of the screen."""
+        """将视线位置重置到屏幕中央。"""
         self.gaze_x = self.screen_w / 2.0
         self.gaze_y = self.screen_h / 2.0
         self.prev_gaze_x = self.gaze_x
         self.prev_gaze_y = self.gaze_y
 
-    # ── Internal tick ──────────────────────────────────────────────
+    # ── 内部 tick ────────────────────────────────────────────────
 
     def _tick(self):
-        """Periodic callback: read camera, predict, smooth, emit."""
+        """定时回调：读帧 → 提取特征 → 预测 → 平滑 → 发送信号。"""
         _, results = self.read_camera()
         if results is None:
-            # The read may have failed; don't change state.
-            # Emit with zero velocity and tracking=False every tick.
             self.tracking = False
             self.gaze_updated.emit(self.gaze_x, self.gaze_y, 0.0, 0.0, False)
             return
@@ -253,26 +227,25 @@ class GazeEngine(QObject):
             if self._has_calib:
                 px, py = self.predict(feats)
             else:
-                # Fallback: use raw iris offsets as a normalised gaze
-                # (clamp to [0, 1] then scale by screen dimensions)
+                # 无校准时使用原始虹膜偏移作为归一化视线
                 px = float(np.clip(feats[0] + 0.5, 0, 1)) * self.screen_w
                 py = float(np.clip(feats[2] + 0.5, 0, 1)) * self.screen_h
 
-            # Dead zone: ignore sub-pixel jitter (< 2 px)
+            # 死区：忽略亚像素抖动
             dx_raw = px - self.gaze_x
             dy_raw = py - self.gaze_y
             if abs(dx_raw) < 1.0 and abs(dy_raw) < 1.0:
                 px = self.gaze_x
                 py = self.gaze_y
 
-            # EMA smoothing
+            # EMA 指数平滑
             self.gaze_x = self.alpha * px + (1.0 - self.alpha) * self.gaze_x
             self.gaze_y = self.alpha * py + (1.0 - self.alpha) * self.gaze_y
             self.tracking = True
         else:
             self.tracking = False
 
-        # Velocity (px / frame)
+        # 计算速度（像素/帧）
         vx = self.gaze_x - self.prev_gaze_x
         vy = self.gaze_y - self.prev_gaze_y
         self.prev_gaze_x = self.gaze_x

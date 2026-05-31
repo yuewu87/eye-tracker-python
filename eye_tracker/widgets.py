@@ -1,4 +1,4 @@
-"""All QWidget subclasses and the aperture renderer."""
+"""所有 QWidget 子类和光圈渲染器。"""
 
 import math
 import ctypes
@@ -8,7 +8,9 @@ from PySide6.QtCore import Qt, QPointF, Signal
 from PySide6.QtGui import (QPainter, QColor, QRadialGradient,
                             QBrush, QFont, QPen)
 
-# ── Windows API helpers ────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════
+# Windows API — 点击穿透和窗口样式
+# ═══════════════════════════════════════════════════════════════════
 
 GWL_EXSTYLE = -20
 WS_EX_TRANSPARENT = 0x00000020
@@ -17,21 +19,22 @@ WS_EX_NOACTIVATE = 0x08000000
 
 
 def win_set_exstyle(hwnd, flags):
+    """给窗口附加扩展样式（如点击穿透）。"""
     ex = ctypes.windll.user32.GetWindowLongW(int(hwnd), GWL_EXSTYLE)
     ctypes.windll.user32.SetWindowLongW(int(hwnd), GWL_EXSTYLE, ex | flags)
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Aperture renderer
+# 光圈渲染
 # ═══════════════════════════════════════════════════════════════════
 
-_R = 28         # base ring radius (smaller, cleaner)
-_SPEED_THRESH = 3.0   # minimum speed before deformation kicks in
-_MAX_STRETCH = 1.5     # maximum elongation
+_R = 28                # 光圈基础半径
+_SPEED_THRESH = 3.0    # 速度阈值：低于此值保持正圆
+_MAX_STRETCH = 1.5     # 最大拉伸比例
 
 
 def draw_glow(painter, x, y, vx, vy, pulse):
-    """Clean circle ring + glow. Deforms to ellipse only during fast movement."""
+    """空心圆环 + 外发光。快速移动时沿速度方向拉伸成椭圆。"""
     speed = math.hypot(vx, vy)
 
     if speed > _SPEED_THRESH:
@@ -46,9 +49,8 @@ def draw_glow(painter, x, y, vx, vy, pulse):
         painter.save()
         painter.translate(x, y)
         cx, cy = 0.0, 0.0
-        stretch = 1.0
 
-    # Outer glow
+    # 外发光
     glow_r = _R + 16
     g = QRadialGradient(QPointF(cx, cy), glow_r)
     g.setColorAt(0.6, QColor(0, 200, 255, 40))
@@ -58,7 +60,7 @@ def draw_glow(painter, x, y, vx, vy, pulse):
     painter.setPen(Qt.NoPen)
     painter.drawEllipse(QPointF(cx, cy), glow_r, glow_r)
 
-    # Hollow ring
+    # 空心圆环
     pen = QPen(QColor(0, 220, 255, 230), 4)
     pen.setCapStyle(Qt.RoundCap)
     painter.setPen(pen)
@@ -69,10 +71,12 @@ def draw_glow(painter, x, y, vx, vy, pulse):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Overlay window — transparent, click-through, always-on-top
+# Overlay 窗口 — 全屏透明、点击穿透、始终置顶
 # ═══════════════════════════════════════════════════════════════════
 
 class OverlayWindow(QWidget):
+    """用户可见的光圈覆盖层。"""
+
     def __init__(self, geo):
         super().__init__()
         self.setGeometry(geo)
@@ -92,6 +96,7 @@ class OverlayWindow(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        # 设为点击穿透 + 不抢焦点
         win_set_exstyle(self.winId(), WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_NOACTIVATE)
 
     def paintEvent(self, event):
@@ -109,10 +114,12 @@ class OverlayWindow(QWidget):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Capture window — black background for OBS chroma-key
+# Capture 窗口 — 全屏黑底，供 OBS 色度键抠图
 # ═══════════════════════════════════════════════════════════════════
 
 class CaptureWindow(QWidget):
+    """OBS 捕捉用窗口：纯黑背景 + 光圈，色度键抠除黑色即可叠加。"""
+
     def __init__(self, geo):
         super().__init__()
         self.setGeometry(geo)
@@ -144,10 +151,12 @@ class CaptureWindow(QWidget):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Main window — dark panel with controls
+# 主控制面板 — 暗色主题
 # ═══════════════════════════════════════════════════════════════════
 
 class MainWindow(QWidget):
+    """暗色主题控制面板：状态灯、坐标显示、平滑滑块、控制按钮。"""
+
     start_clicked = Signal()
     calibrate_clicked = Signal()
     hide_clicked = Signal()
@@ -165,7 +174,7 @@ class MainWindow(QWidget):
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(10)
 
-        # Status
+        # 状态行：指示灯 + 文字
         status_row = QHBoxLayout()
         self.led = QLabel("●")
         self.led.setStyleSheet("color: #555; font-size: 18px;")
@@ -177,11 +186,12 @@ class MainWindow(QWidget):
         status_row.addStretch()
         layout.addLayout(status_row)
 
+        # 视线坐标
         self.coord_label = QLabel("视线: (— , —)")
         self.coord_label.setStyleSheet("color: #666; font-size: 12px;")
         layout.addWidget(self.coord_label)
 
-        # Smoothing
+        # 平滑滑块
         smooth_row = QHBoxLayout()
         smooth_label = QLabel("平滑:")
         smooth_label.setStyleSheet("color: #888; font-size: 12px;")
@@ -205,23 +215,25 @@ class MainWindow(QWidget):
         layout.addLayout(smooth_row)
         layout.addSpacing(6)
 
-        # Start button
+        # 开始/停止追踪按钮
         self.start_btn = QPushButton("开始追踪")
         self.start_btn.setStyleSheet("""
-            QPushButton { padding: 12px; font-size: 15px; font-weight: bold; border-radius: 6px; border: 2px solid #0af; background: transparent; color: #0af; }
+            QPushButton { padding: 12px; font-size: 15px; font-weight: bold;
+            border-radius: 6px; border: 2px solid #0af; background: transparent; color: #0af; }
             QPushButton:hover { background: #0af; color: #111; }
             QPushButton:disabled { border-color: #444; color: #444; }
         """)
         self.start_btn.clicked.connect(self.start_clicked)
         layout.addWidget(self.start_btn)
 
-        # Bottom buttons
+        # 底部按钮：隐藏 + 校准
         btn_row = QHBoxLayout()
         btn_row.setSpacing(10)
         self.hide_btn = QPushButton("隐藏")
         self.hide_btn.setEnabled(False)
         self.hide_btn.setStyleSheet("""
-            QPushButton { padding: 10px; font-size: 13px; border-radius: 5px; border: 1px solid #666; background: transparent; color: #aaa; }
+            QPushButton { padding: 10px; font-size: 13px; border-radius: 5px;
+            border: 1px solid #666; background: transparent; color: #aaa; }
             QPushButton:hover { border-color: #0af; color: #0af; }
             QPushButton:disabled { border-color: #333; color: #444; }
         """)
@@ -229,7 +241,8 @@ class MainWindow(QWidget):
 
         self.cal_btn = QPushButton("校准")
         self.cal_btn.setStyleSheet("""
-            QPushButton { padding: 10px; font-size: 13px; border-radius: 5px; border: 1px solid #666; background: transparent; color: #aaa; }
+            QPushButton { padding: 10px; font-size: 13px; border-radius: 5px;
+            border: 1px solid #666; background: transparent; color: #aaa; }
             QPushButton:hover { border-color: #fa0; color: #fa0; }
         """)
         self.cal_btn.clicked.connect(self.calibrate_clicked)
@@ -239,6 +252,7 @@ class MainWindow(QWidget):
         self.setLayout(layout)
 
     def update_status(self, tracking, gaze_x, gaze_y):
+        """更新状态显示，仅在状态变化时刷新样式表。"""
         changed = (tracking != self._prev_tracking)
         if changed:
             self._prev_tracking = tracking
@@ -258,17 +272,20 @@ class MainWindow(QWidget):
             self.coord_label.setStyleSheet("color: #666; font-size: 12px;")
 
     def set_tracking_active(self, active):
+        """切换开始/停止按钮样式和隐藏按钮可用状态。"""
         if active:
             self.start_btn.setText("停止追踪")
             self.start_btn.setStyleSheet("""
-                QPushButton { padding: 12px; font-size: 15px; font-weight: bold; border-radius: 6px; border: 2px solid #f55; background: transparent; color: #f55; }
+                QPushButton { padding: 12px; font-size: 15px; font-weight: bold;
+                border-radius: 6px; border: 2px solid #f55; background: transparent; color: #f55; }
                 QPushButton:hover { background: #f55; color: #111; }
             """)
             self.hide_btn.setEnabled(True)
         else:
             self.start_btn.setText("开始追踪")
             self.start_btn.setStyleSheet("""
-                QPushButton { padding: 12px; font-size: 15px; font-weight: bold; border-radius: 6px; border: 2px solid #0af; background: transparent; color: #0af; }
+                QPushButton { padding: 12px; font-size: 15px; font-weight: bold;
+                border-radius: 6px; border: 2px solid #0af; background: transparent; color: #0af; }
                 QPushButton:hover { background: #0af; color: #111; }
             """)
             self.hide_btn.setEnabled(False)

@@ -1,4 +1,4 @@
-"""Gaze calibration: 5-point calibration with MediaPipe iris detection + Ridge regression."""
+"""视线校准模块 — 全屏 9 点校准流程，使用引擎共享的摄像头和特征提取。"""
 
 import os
 import sys
@@ -10,18 +10,21 @@ from PySide6.QtGui import QPainter, QColor, QFont
 
 from engine import extract_features
 
+# 3×3 网格校准点（归一化屏幕坐标）
 CALIB_POINTS = [
     (0.1, 0.1), (0.5, 0.1), (0.9, 0.1),
     (0.1, 0.5), (0.5, 0.5), (0.9, 0.5),
     (0.1, 0.9), (0.5, 0.9), (0.9, 0.9),
 ]
 
-SAMPLES_PER_POINT = 80
-SETTLE_SECONDS = 1.0
-PREP_SECONDS = 1.5
+SAMPLES_PER_POINT = 80   # 每点采集帧数
+SETTLE_SECONDS = 1.0     # 注视稳定时间
+PREP_SECONDS = 1.5       # 倒计时准备时间
 
 
 class CalibrationWindow(QWidget):
+    """全屏校准窗口：依次显示 9 个注视点，采集虹膜特征训练 Ridge 回归。"""
+
     calibration_done = Signal()
 
     def __init__(self, engine):
@@ -34,33 +37,30 @@ class CalibrationWindow(QWidget):
 
         self.setCursor(Qt.BlankCursor)
         self.setStyleSheet("background: #111;")
-        self.setWindowFlags(
-            Qt.FramelessWindowHint |
-            Qt.WindowStaysOnTopHint
-        )
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setGeometry(screen)
 
-        self.current_idx = 0
-        self.phase = "prep"
-        self.phase_timer = 0.0
-        self.collected = 0
-        self.samples = []
+        self.current_idx = 0          # 当前校准点索引
+        self.phase = "prep"           # prep → settle → collect
+        self.phase_timer = 0.0        # 当前阶段计时器
+        self.collected = 0            # 当前点已采集帧数
+        self.samples = []             # [(features, target), ...]
 
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
-        self.timer.setInterval(33)
+        self.timer.setInterval(33)    # ~30 fps
 
         print("[i] 显示校准窗口...")
         self.showFullScreen()
         self.timer.start()
 
+    # ── 绘制 ──────────────────────────────────────────────────────
+
     def paintEvent(self, event):
         try:
             p = QPainter(self)
             p.setRenderHint(QPainter.Antialiasing)
-
             w, h = self.width(), self.height()
-
             p.fillRect(self.rect(), QColor(0, 0, 0))
 
             if self.current_idx >= len(CALIB_POINTS):
@@ -103,7 +103,6 @@ class CalibrationWindow(QWidget):
             p.setFont(QFont("Arial", 13))
             labels = {"prep": "准备注视", "settle": "保持注视...", "collect": "采集中..."}
             p.drawText(20, 30, f"[{self.current_idx + 1}/{len(CALIB_POINTS)}]  {labels[self.phase]}")
-
             p.end()
         except Exception as e:
             print(f"[!] paint 错误: {e}", file=sys.stderr)
@@ -116,6 +115,8 @@ class CalibrationWindow(QWidget):
             self.close()
             self.calibration_done.emit()
 
+    # ── 主循环 ────────────────────────────────────────────────────
+
     def _tick(self):
         try:
             self._tick_impl()
@@ -126,10 +127,8 @@ class CalibrationWindow(QWidget):
 
     def _tick_impl(self):
         dt = 0.033
-
         if self.current_idx >= len(CALIB_POINTS):
             return
-
         self.phase_timer += dt
 
         if self.phase == "prep" and self.phase_timer >= PREP_SECONDS:
@@ -150,6 +149,7 @@ class CalibrationWindow(QWidget):
         self.repaint()
 
     def _collect_frame(self):
+        """从引擎读取一帧，提取特征并与注视点坐标配对存储。"""
         _, results = self.engine.read_camera()
         if results is None:
             return
@@ -162,6 +162,8 @@ class CalibrationWindow(QWidget):
         target = np.array([px * self.width(), py * self.height()])
         self.samples.append((feats, target))
         self.collected += 1
+
+    # ── 拟合与保存 ────────────────────────────────────────────────
 
     def _finish(self):
         self.timer.stop()
@@ -196,11 +198,9 @@ class CalibrationWindow(QWidget):
 
 
 def run_calibration(engine):
-    """Run fullscreen calibration. Blocks until done. Returns 0 on success."""
+    """运行全屏校准，阻塞直到完成。返回 0。"""
     window = CalibrationWindow(engine)
     loop = QEventLoop()
     window.calibration_done.connect(loop.quit)
     loop.exec()
     return 0
-
-
