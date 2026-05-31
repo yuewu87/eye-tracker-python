@@ -170,6 +170,14 @@ class GazeEngine(QObject):
         self.intercept = calib["intercept"]
         self.x_mean = calib["x_mean"]
         self.x_std = calib["x_std"]
+
+        # Validate feature dimension
+        n_features = len(self.x_mean)
+        if n_features != 7:
+            print(f"[!] 校准文件特征维度不匹配 ({n_features} != 7)，请重新校准")
+            self._has_calib = False
+            return
+
         calib_w = float(calib["screen_w"])
         calib_h = float(calib["screen_h"])
         self.scale_x = self.screen_w / calib_w
