@@ -90,10 +90,10 @@ class App:
         was_tracking = self.tracking_active
         if was_tracking:
             self._stop_tracking()
-        self.engine.stop_camera()
+        self.engine.pause()
         self.main_window.hide()
         run_calibration(self.engine)
-        self.engine.start_camera()
+        self.engine.resume()
         calib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration.npz")
         if self.engine.has_calibration(calib_path):
             self.engine.load_calibration(calib_path)

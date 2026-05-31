@@ -111,6 +111,14 @@ class GazeEngine(QObject):
 
         self.timer.start(33)  # ~30 fps
 
+    def pause(self):
+        """Stop the tick timer but keep camera and face_mesh alive (for calibration)."""
+        self.timer.stop()
+
+    def resume(self):
+        """Restart the tick timer after pause()."""
+        self.timer.start(33)
+
     def stop_camera(self):
         """Stop the tick timer and release camera / MediaPipe resources."""
         self.timer.stop()
