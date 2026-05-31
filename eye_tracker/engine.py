@@ -2,10 +2,10 @@
 
 import math
 import os
+import pickle
 import cv2
 import mediapipe as mp
 import numpy as np
-from sklearn.preprocessing import PolynomialFeatures
 from PySide6.QtCore import QObject, Signal, QTimer
 
 # ═══════════════════════════════════════════════════════════════════
@@ -95,14 +95,12 @@ class GazeEngine(QObject):
         self.cap = None
         self.face_mesh = None
 
-        # 校准参数
-        self.coef = None
-        self.intercept = None
+        # 校准模型
+        self.model = None       # GradientBoostingRegressor
         self.x_mean = None
         self.x_std = None
         self.scale_x = 1.0
         self.scale_y = 1.0
-        self._poly = None       # 多项式特征转换器
         self._has_calib = False
 
         # 定时器
@@ -117,8 +115,8 @@ class GazeEngine(QObject):
         if not self.cap.isOpened():
             print("[!] 无法打开摄像头")
             return
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
         self.face_mesh = _FaceMesh(
             static_image_mode=False,
@@ -162,44 +160,28 @@ class GazeEngine(QObject):
 
     def load_calibration(self, path: str):
         """加载 calibration.npz 并计算屏幕缩放比例。"""
-        calib = np.load(path)
-        self.coef = calib["coef"]
-        self.intercept = calib["intercept"]
+        calib = np.load(path, allow_pickle=True)
         self.x_mean = calib["x_mean"]
         self.x_std = calib["x_std"]
 
-        # 校验特征维度
         n_features = len(self.x_mean)
         if n_features != 7:
             print(f"[!] 校准文件特征维度不匹配 ({n_features} != 7)，请重新校准")
             self._has_calib = False
             return
 
+        self.model = calib["model"].item()  # GradientBoostingRegressor
+
         calib_w = float(calib["screen_w"])
         calib_h = float(calib["screen_h"])
         self.scale_x = self.screen_w / calib_w
         self.scale_y = self.screen_h / calib_h
-
-        # 重建多项式特征转换器
-        if "poly_degree" in calib:
-            degree = int(calib["poly_degree"])
-            n_in = int(calib["poly_features_in"])
-            self._poly = PolynomialFeatures(degree=degree, include_bias=False)
-            self._poly.fit(np.zeros((1, n_in)))  # 初始化内部参数
-        else:
-            self._poly = None
-
         self._has_calib = True
 
     def predict(self, features: np.ndarray):
         """将特征向量映射为屏幕坐标 (x, y)。"""
-        x_norm = (features - self.x_mean) / self.x_std
-
-        # 多项式特征扩展（与校准时一致）
-        if self._poly is not None:
-            x_norm = self._poly.fit_transform(x_norm.reshape(1, -1)).flatten()
-
-        pred = self.coef @ x_norm + self.intercept
+        x_norm = ((features - self.x_mean) / self.x_std).reshape(1, -1)
+        pred = self.model.predict(x_norm)[0]
         pred[0] *= self.scale_x
         pred[1] *= self.scale_y
         return (float(np.clip(pred[0], 0, self.screen_w)),

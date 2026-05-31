@@ -63,14 +63,14 @@ def draw_glow(painter, x, y, vx, vy, pulse):
             ty = y + ny * tail_len * t
             seg_r = _R + _R * t * 0.6
             alpha = int(100 * (1.0 - t))
-            pen = QPen(QColor(160, 100, 240, alpha), 3)
+            pen = QPen(QColor(160, 100, 240, alpha), 1.5)
             pen.setCapStyle(Qt.RoundCap)
             painter.setPen(pen)
             painter.setBrush(Qt.NoBrush)
             painter.drawEllipse(QPointF(tx, ty), seg_r, seg_r)
 
     # ── 主环 — 白→紫渐变空心圆环 ────────────────────────────
-    pen_main = QPen(QColor(255, 255, 255, 240), 5)
+    pen_main = QPen(QColor(255, 255, 255, 240), 2)
     pen_main.setCapStyle(Qt.RoundCap)
     painter.setPen(pen_main)
     painter.setBrush(Qt.NoBrush)

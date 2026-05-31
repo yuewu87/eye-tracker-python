@@ -3,9 +3,7 @@
 import os
 import sys
 import numpy as np
-from sklearn.linear_model import RidgeCV
-from sklearn.preprocessing import PolynomialFeatures, StandardScaler
-from sklearn.pipeline import make_pipeline
+from sklearn.ensemble import GradientBoostingRegressor
 from PySide6.QtWidgets import QApplication, QWidget
 from PySide6.QtCore import Qt, QTimer, QPoint, Signal, QEventLoop
 from PySide6.QtGui import QPainter, QColor, QFont
@@ -177,27 +175,21 @@ class CalibrationWindow(QWidget):
             self.x_std  = X.std(axis=0) + 1e-6
             X_norm = (X - self.x_mean) / self.x_std
 
-            # 多项式特征 + Ridge 回归：捕捉非线性视线映射
-            poly = PolynomialFeatures(degree=2, include_bias=False)
-            X_poly = poly.fit_transform(X_norm)
-            n_feat = X_poly.shape[1]
-            print(f"[i] 多项式特征: 7 → {n_feat}")
-
-            model = RidgeCV(alphas=[0.01, 0.1, 0.5, 1.0, 5.0, 10.0])
-            model.fit(X_poly, y)
-            print(f"[i] 最佳 Ridge alpha: {model.alpha_}")
+            # 梯度提升回归：树模型天然处理非线性映射
+            model = GradientBoostingRegressor(
+                n_estimators=100, max_depth=4, learning_rate=0.1,
+                random_state=42)
+            model.fit(X_norm, y)
+            print(f"[i] GBR 训练完成, R²={model.score(X_norm, y):.3f}")
 
             screen = QApplication.primaryScreen().geometry()
             save_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration.npz")
             np.savez(save_path,
-                     coef=model.coef_.astype(np.float64),
-                     intercept=model.intercept_.astype(np.float64),
                      x_mean=self.x_mean.astype(np.float64),
                      x_std=self.x_std.astype(np.float64),
                      screen_w=screen.width(),
                      screen_h=screen.height(),
-                     poly_degree=2,
-                     poly_features_in=7)
+                     model=model)
             print(f"[OK] 校准参数已保存: {save_path}")
             print(f"     样本数: {len(self.samples)}, 屏幕: {screen.width()}x{screen.height()}")
 
