@@ -140,7 +140,7 @@ class CaptureWindow(QWidget):
         self.setGeometry(geo)
         self.setWindowTitle("Eye Tracker - Capture")
         self.setWindowFlags(
-            Qt.FramelessWindowHint | Qt.Tool | Qt.NoDropShadowWindowHint
+            Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint
         )
         self.setAutoFillBackground(True)
         self.setStyleSheet("background: #000000;")
