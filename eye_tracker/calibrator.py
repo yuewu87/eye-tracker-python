@@ -296,8 +296,8 @@ class CenterCalibWindow(QWidget):
         pred[1] *= scale_y
 
         # 计算中心偏移
-        cx = engine.screen_w / 2
-        cy = engine.screen_h / 2
+        cx = self.engine.screen_w / 2
+        cy = self.engine.screen_h / 2
         offset_x = cx - pred[0]
         offset_y = cy - pred[1]
 
@@ -305,8 +305,8 @@ class CenterCalibWindow(QWidget):
 
         # 修正整个模型：对所有训练样本的 target 加偏移，重新训练
         # 简化方案：在引擎中存储 bias 修正量
-        engine.bias_x = offset_x
-        engine.bias_y = offset_y
+        self.engine.bias_x = offset_x
+        self.engine.bias_y = offset_y
 
         self.close()
         self.calibration_done.emit()
