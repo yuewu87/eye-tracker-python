@@ -78,7 +78,7 @@ class GazeEngine(QObject):
         self.prev_gaze_y = screen_h / 2.0
 
         # EMA 平滑系数（0.01=极平滑, 0.5=极灵敏）
-        self.alpha = 0.18
+        self.alpha = 0.08
 
         # 当前帧是否检测到人脸
         self.tracking = False
@@ -234,7 +234,7 @@ class GazeEngine(QObject):
             # 死区：忽略亚像素抖动
             dx_raw = px - self.gaze_x
             dy_raw = py - self.gaze_y
-            if abs(dx_raw) < 1.0 and abs(dy_raw) < 1.0:
+            if abs(dx_raw) < 3.0 and abs(dy_raw) < 3.0:
                 px = self.gaze_x
                 py = self.gaze_y
 

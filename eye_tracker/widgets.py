@@ -29,7 +29,7 @@ def win_set_exstyle(hwnd, flags):
 # ═══════════════════════════════════════════════════════════════════
 
 _R = 56                # 光圈基础半径
-_SPEED_THRESH = 8.0    # 速度阈值：大幅移动才显示拖尾
+_SPEED_THRESH = 20.0   # 速度阈值：只有快速扫视才显示拖尾
 _TAIL_LEN = 0.6        # 拖尾长度系数
 _TAIL_SEG = 4          # 拖尾段数
 
@@ -213,13 +213,13 @@ class MainWindow(QWidget):
         smooth_label.setFixedWidth(40)
         self.smooth_slider = QSlider(Qt.Horizontal)
         self.smooth_slider.setRange(2, 50)
-        self.smooth_slider.setValue(18)
+        self.smooth_slider.setValue(8)
         self.smooth_slider.setStyleSheet("""
             QSlider::groove:horizontal { height: 4px; background: #333; border-radius: 2px; }
             QSlider::handle:horizontal { width: 14px; height: 14px; margin: -5px 0; background: #0af; border-radius: 7px; }
             QSlider::sub-page:horizontal { background: #0af; border-radius: 2px; }
         """)
-        self.smooth_val = QLabel("0.18")
+        self.smooth_val = QLabel("0.08")
         self.smooth_val.setStyleSheet("color: #0af; font-size: 12px;")
         self.smooth_val.setFixedWidth(36)
         self.smooth_slider.valueChanged.connect(lambda v: self.smoothing_changed.emit(v / 100.0))
