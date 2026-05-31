@@ -53,7 +53,6 @@ class App:
         else:
             self.main_window.status_label.setText("校准失败，请重试")
 
-        # 定时刷新主界面状态
         self._status_timer = QTimer()
         self._status_timer.timeout.connect(self._update_ui)
         self._status_timer.start(50)
@@ -74,11 +73,9 @@ class App:
         self.capture = CaptureWindow(screen_geo)
         self.engine.reset_position()
         self.tracking_active = True
-        self.overlay_visible = False
+        self.overlay_visible = True
         self.main_window.set_tracking_active(True)
         self.engine.gaze_updated.connect(self._on_gaze)
-        QApplication.processEvents()
-        self._toggle_overlay()  # 强制显示确保渲染
 
     def _stop_tracking(self):
         self.engine.gaze_updated.disconnect(self._on_gaze)
@@ -102,10 +99,10 @@ class App:
         was_tracking = self.tracking_active
         if was_tracking:
             self._stop_tracking()
-        self.engine.pause()              # 暂停 tick，保持摄像头存活
+        self.engine.pause()
         self.main_window.hide()
         run_calibration(self.engine)
-        self.engine.resume()             # 恢复 tick
+        self.engine.resume()
         calib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration.npz")
         if self.engine.has_calibration(calib_path):
             self.engine.load_calibration(calib_path)
@@ -114,7 +111,6 @@ class App:
             self._start_tracking()
 
     def _run_center_calibration(self):
-        """单点中心校准：注视屏幕中央 2.5 秒修正漂移。"""
         was_tracking = self.tracking_active
         if was_tracking:
             self._stop_tracking()

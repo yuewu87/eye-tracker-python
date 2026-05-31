@@ -2,8 +2,8 @@
 
 import math
 import ctypes
-from PySide6.QtWidgets import (QWidget, QPushButton, QLabel, QSlider,
-                                QVBoxLayout, QHBoxLayout)
+from PySide6.QtWidgets import (QWidget, QMainWindow, QPushButton, QLabel,
+                                QSlider, QVBoxLayout, QHBoxLayout)
 from PySide6.QtCore import Qt, QPointF, Signal
 from PySide6.QtGui import (QPainter, QColor, QRadialGradient,
                             QBrush, QFont, QPen)
@@ -129,24 +129,19 @@ class OverlayWindow(QWidget):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Capture 窗口 — 全屏黑底，供 OBS 色度键抠图
+# Capture 窗口 — OBS 窗口捕获用 (QMainWindow 确保可被枚举)
 # ═══════════════════════════════════════════════════════════════════
 
-class CaptureWindow(QWidget):
-    """OBS 捕捉用窗口：纯黑背景 + 光圈，色度键抠除黑色即可叠加。
-
-    使用普通窗口（非全屏无边框），OBS 窗口捕获后缩放至全屏即可。
-    """
+class CaptureWindow(QMainWindow):
+    """供 OBS 窗口捕获的黑底光圈窗口。使用 QMainWindow 确保出现在窗口列表。"""
 
     def __init__(self, geo):
         super().__init__()
         self._screen_w = geo.width()
         self._screen_h = geo.height()
-        # 普通窗口，OBS 能识别
         self.setWindowTitle("Eye Tracker - Capture")
         self.resize(960, 540)
-        self.move(100, 100)
-        self.setAutoFillBackground(True)
+        self.move(50, 50)
         self.setStyleSheet("background: #000000;")
         self._gx = geo.width() // 2
         self._gy = geo.height() // 2
@@ -156,10 +151,10 @@ class CaptureWindow(QWidget):
         self._tracking = False
 
     def paintEvent(self, event):
+        from PySide6.QtGui import QPainter
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         if self._tracking:
-            # 将屏幕坐标缩放到窗口坐标
             sx = self._gx * (self.width() / self._screen_w)
             sy = self._gy * (self.height() / self._screen_h)
             svx = self._vx * (self.width() / self._screen_w)
