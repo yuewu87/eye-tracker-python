@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QApplication, QWidget
 from PySide6.QtCore import Qt, QTimer, QPoint
 from PySide6.QtGui import QPainter, QColor, QFont
 
-from eye_tracker.engine import extract_features
+from engine import extract_features
 
 CALIB_POINTS = [
     (0.1, 0.1), (0.9, 0.1), (0.5, 0.5), (0.1, 0.9), (0.9, 0.9),
@@ -192,9 +192,3 @@ def run_calibration(engine):
     sys.exit(app.exec())
 
 
-if __name__ == "__main__":
-    from eye_tracker.engine import GazeEngine
-    screen = QApplication.primaryScreen().geometry() if QApplication.instance() else (1920, 1080)
-    eng = GazeEngine(1920, 1080)
-    eng.start_camera()
-    run_calibration(eng)
