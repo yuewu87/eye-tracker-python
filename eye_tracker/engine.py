@@ -1,5 +1,6 @@
 """视线追踪引擎 — 封装摄像头、MediaPipe 人脸网格、校准模型和平滑滤波。"""
 
+import math
 import os
 import cv2
 import mediapipe as mp
@@ -46,12 +47,18 @@ def extract_features(face_landmarks):
     nose_dx = nose[0] - face_cx
     nose_dy = nose[1] - face_cy
 
-    # 虹膜相对眼睛中心的偏移
-    dr = ri - re
-    dl = li - le
+    # 虹膜偏移 + 鼻尖偏移 — 除以眼距实现距离不变
+    if eye_dist < 1e-6:
+        eye_dist = 1.0
+
+    dr = (ri - re) / eye_dist
+    dl = (li - le) / eye_dist
+    nose_dx /= eye_dist
+    nose_dy /= eye_dist
+    eye_dist_log = math.log1p(eye_dist * 100)  # 对数压缩保留距离信息
 
     return np.array([dr[0], dr[1], dl[0], dl[1],
-                     nose_dx, nose_dy, eye_dist], dtype=np.float32)
+                     nose_dx, nose_dy, eye_dist_log], dtype=np.float32)
 
 
 # ═══════════════════════════════════════════════════════════════════
