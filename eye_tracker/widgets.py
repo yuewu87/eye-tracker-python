@@ -25,37 +25,45 @@ def win_set_exstyle(hwnd, flags):
 # Aperture renderer
 # ═══════════════════════════════════════════════════════════════════
 
-_R = 42  # ring radius
+_R = 28         # base ring radius (smaller, cleaner)
+_SPEED_THRESH = 3.0   # minimum speed before deformation kicks in
+_MAX_STRETCH = 1.5     # maximum elongation
 
 
 def draw_glow(painter, x, y, vx, vy, pulse):
-    """Hollow ring + outer glow, stretches along velocity for fluid feel."""
+    """Clean circle ring + glow. Deforms to ellipse only during fast movement."""
     speed = math.hypot(vx, vy)
-    stretch = 1.0 + speed * 0.08
-    if stretch > 1.8:
-        stretch = 1.8
-    angle = math.degrees(math.atan2(vy, vx)) if speed > 0.5 else 0.0
 
-    painter.save()
-    painter.translate(x, y)
-    painter.rotate(angle)
-    painter.scale(stretch, 1.0 / stretch)
+    if speed > _SPEED_THRESH:
+        stretch = min(1.0 + speed * 0.04, _MAX_STRETCH)
+        angle = math.degrees(math.atan2(vy, vx))
+        painter.save()
+        painter.translate(x, y)
+        painter.rotate(angle)
+        painter.scale(stretch, 1.0 / stretch)
+        cx, cy = 0.0, 0.0
+    else:
+        painter.save()
+        painter.translate(x, y)
+        cx, cy = 0.0, 0.0
+        stretch = 1.0
 
     # Outer glow
-    g = QRadialGradient(QPointF(0, 0), _R + 20)
-    g.setColorAt(0.70, QColor(0, 200, 255, 35))
-    g.setColorAt(0.85, QColor(0, 160, 255, 15))
-    g.setColorAt(1.00, QColor(0, 0, 0, 0))
+    glow_r = _R + 16
+    g = QRadialGradient(QPointF(cx, cy), glow_r)
+    g.setColorAt(0.6, QColor(0, 200, 255, 40))
+    g.setColorAt(0.8, QColor(0, 160, 255, 15))
+    g.setColorAt(1.0, QColor(0, 0, 0, 0))
     painter.setBrush(QBrush(g))
     painter.setPen(Qt.NoPen)
-    painter.drawEllipse(QPointF(0, 0), _R + 20, _R + 20)
+    painter.drawEllipse(QPointF(cx, cy), glow_r, glow_r)
 
     # Hollow ring
-    pen = QPen(QColor(0, 220, 255, 220), 5)
+    pen = QPen(QColor(0, 220, 255, 230), 4)
     pen.setCapStyle(Qt.RoundCap)
     painter.setPen(pen)
     painter.setBrush(Qt.NoBrush)
-    painter.drawEllipse(QPointF(0, 0), _R, _R)
+    painter.drawEllipse(QPointF(cx, cy), _R, _R)
 
     painter.restore()
 
