@@ -12,16 +12,14 @@ from PySide6.QtGui import QPainter, QColor, QFont
 
 from engine import extract_features
 
-# 3×3 网格校准点（归一化屏幕坐标）
+# 5 点校准（四角 + 中心），减少眼部疲劳
 CALIB_POINTS = [
-    (0.1, 0.1), (0.5, 0.1), (0.9, 0.1),
-    (0.1, 0.5), (0.5, 0.5), (0.9, 0.5),
-    (0.1, 0.9), (0.5, 0.9), (0.9, 0.9),
+    (0.1, 0.1), (0.9, 0.1), (0.5, 0.5), (0.1, 0.9), (0.9, 0.9),
 ]
 
-SAMPLES_PER_POINT = 80   # 每点采集帧数
-SETTLE_SECONDS = 1.0     # 注视稳定时间
-PREP_SECONDS = 1.5       # 倒计时准备时间
+SAMPLES_PER_POINT = 60   # 每点采集帧数
+SETTLE_SECONDS = 0.8     # 注视稳定时间
+PREP_SECONDS = 1.0       # 倒计时准备时间
 
 
 class CalibrationWindow(QWidget):
@@ -38,7 +36,7 @@ class CalibrationWindow(QWidget):
         print(f"[i] 屏幕: {screen.width()}x{screen.height()}")
 
         self.setCursor(Qt.BlankCursor)
-        self.setStyleSheet("background: #111;")
+        self.setStyleSheet("background: #1a1a1a;")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setGeometry(screen)
 
@@ -63,7 +61,7 @@ class CalibrationWindow(QWidget):
             p = QPainter(self)
             p.setRenderHint(QPainter.Antialiasing)
             w, h = self.width(), self.height()
-            p.fillRect(self.rect(), QColor(0, 0, 0))
+            p.fillRect(self.rect(), QColor(26, 26, 26))
 
             if self.current_idx >= len(CALIB_POINTS):
                 p.setPen(QColor(255, 255, 255))
@@ -77,14 +75,14 @@ class CalibrationWindow(QWidget):
             cy = int(py * h)
 
             if self.phase == "prep":
-                radius = 14 + 5 * np.sin(self.phase_timer * 4)
-                color = QColor(255, 180, 50)
+                radius = 30 + 8 * np.sin(self.phase_timer * 3)
+                color = QColor(200, 160, 255, 120)
             elif self.phase == "settle":
-                radius = 22
-                color = QColor(0, 255, 100)
+                radius = 36
+                color = QColor(180, 140, 240, 160)
             else:
-                radius = 18
-                color = QColor(0, 200, 255)
+                radius = 28
+                color = QColor(160, 180, 255, 200)
                 bar_w, bar_h = 300, 6
                 bx = (w - bar_w) // 2
                 by_ = h - 50
@@ -97,8 +95,8 @@ class CalibrationWindow(QWidget):
 
             if self.phase == "prep":
                 sec = max(1, int(np.ceil(PREP_SECONDS - self.phase_timer)))
-                p.setPen(QColor(255, 255, 255, 180))
-                p.setFont(QFont("Arial", 64, QFont.Bold))
+                p.setPen(QColor(255, 255, 255, 100))
+                p.setFont(QFont("Arial", 36))
                 p.drawText(self.rect(), Qt.AlignCenter, str(sec))
 
             p.setPen(QColor(120, 120, 120))
