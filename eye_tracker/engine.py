@@ -231,7 +231,7 @@ class GazeEngine(QObject):
                 px = float(np.clip(feats[0] + 0.5, 0, 1)) * self.screen_w
                 py = float(np.clip(feats[2] + 0.5, 0, 1)) * self.screen_h
 
-            # 死区：忽略亚像素抖动
+            # 死区：忽略亚像素抖动（3px）
             dx_raw = px - self.gaze_x
             dy_raw = py - self.gaze_y
             if abs(dx_raw) < 3.0 and abs(dy_raw) < 3.0:
