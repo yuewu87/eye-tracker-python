@@ -5,6 +5,7 @@ import os
 import cv2
 import mediapipe as mp
 import numpy as np
+from sklearn.preprocessing import PolynomialFeatures
 from PySide6.QtCore import QObject, Signal, QTimer
 
 # ═══════════════════════════════════════════════════════════════════
@@ -101,6 +102,7 @@ class GazeEngine(QObject):
         self.x_std = None
         self.scale_x = 1.0
         self.scale_y = 1.0
+        self._poly = None       # 多项式特征转换器
         self._has_calib = False
 
         # 定时器
@@ -177,11 +179,26 @@ class GazeEngine(QObject):
         calib_h = float(calib["screen_h"])
         self.scale_x = self.screen_w / calib_w
         self.scale_y = self.screen_h / calib_h
+
+        # 重建多项式特征转换器
+        if "poly_degree" in calib:
+            degree = int(calib["poly_degree"])
+            n_in = int(calib["poly_features_in"])
+            self._poly = PolynomialFeatures(degree=degree, include_bias=False)
+            self._poly.fit(np.zeros((1, n_in)))  # 初始化内部参数
+        else:
+            self._poly = None
+
         self._has_calib = True
 
     def predict(self, features: np.ndarray):
         """将特征向量映射为屏幕坐标 (x, y)。"""
         x_norm = (features - self.x_mean) / self.x_std
+
+        # 多项式特征扩展（与校准时一致）
+        if self._poly is not None:
+            x_norm = self._poly.fit_transform(x_norm.reshape(1, -1)).flatten()
+
         pred = self.coef @ x_norm + self.intercept
         pred[0] *= self.scale_x
         pred[1] *= self.scale_y
