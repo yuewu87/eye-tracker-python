@@ -174,13 +174,14 @@ class MainWindow(QWidget):
 
     start_clicked = Signal()
     calibrate_clicked = Signal()
+    center_calibrate_clicked = Signal()
     hide_clicked = Signal()
     smoothing_changed = Signal(float)
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Eye Tracker")
-        self.setFixedSize(340, 280)
+        self.setFixedSize(400, 280)
         self.setWindowFlags(Qt.WindowCloseButtonHint | Qt.WindowStaysOnTopHint)
         self.setStyleSheet("background: #1a1a1a;")
         self._prev_tracking = None
@@ -261,8 +262,18 @@ class MainWindow(QWidget):
             QPushButton:hover { border-color: #fa0; color: #fa0; }
         """)
         self.cal_btn.clicked.connect(self.calibrate_clicked)
+
+        self.center_cal_btn = QPushButton("中心校准")
+        self.center_cal_btn.setStyleSheet("""
+            QPushButton { padding: 10px; font-size: 13px; border-radius: 5px;
+            border: 1px solid #666; background: transparent; color: #aaa; }
+            QPushButton:hover { border-color: #af0; color: #af0; }
+        """)
+        self.center_cal_btn.clicked.connect(self.center_calibrate_clicked)
+
         btn_row.addWidget(self.hide_btn)
         btn_row.addWidget(self.cal_btn)
+        btn_row.addWidget(self.center_cal_btn)
         layout.addLayout(btn_row)
         self.setLayout(layout)
 

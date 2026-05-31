@@ -139,6 +139,10 @@ class GazeEngine(QObject):
         self.scale_y = 1.0
         self._has_calib = False
 
+        # 中心校准偏置修正
+        self.bias_x = 0.0
+        self.bias_y = 0.0
+
         # Kalman 滤波器
         self.kf = KalmanFilter()
 
@@ -204,8 +208,8 @@ class GazeEngine(QObject):
     def predict(self, features: np.ndarray):
         x_norm = ((features - self.x_mean) / self.x_std).reshape(1, -1)
         pred = self.model.predict(x_norm)[0]
-        pred[0] *= self.scale_x
-        pred[1] *= self.scale_y
+        pred[0] = pred[0] * self.scale_x + self.bias_x
+        pred[1] = pred[1] * self.scale_y + self.bias_y
         return (float(np.clip(pred[0], 0, self.screen_w)),
                 float(np.clip(pred[1], 0, self.screen_h)))
 

@@ -7,7 +7,7 @@ from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.multioutput import MultiOutputRegressor
 from PySide6.QtWidgets import QApplication, QWidget
 from PySide6.QtCore import Qt, QTimer, QPoint, Signal, QEventLoop
-from PySide6.QtGui import QPainter, QColor, QFont
+from PySide6.QtGui import QPainter, QColor, QFont, QPen
 
 from engine import extract_features
 
@@ -200,9 +200,121 @@ class CalibrationWindow(QWidget):
 
 
 def run_calibration(engine):
-    """运行全屏校准，阻塞直到完成。返回 0。"""
+    """运行全屏 5 点校准，阻塞直到完成。"""
     window = CalibrationWindow(engine)
     loop = QEventLoop()
     window.calibration_done.connect(loop.quit)
     loop.exec()
-    return 0
+
+
+class CenterCalibWindow(QWidget):
+    """单点中心校准：注视屏幕中央 2 秒，修正漂移。"""
+    calibration_done = Signal()
+
+    def __init__(self, engine):
+        super().__init__()
+        self.engine = engine
+        screen = QApplication.primaryScreen().geometry()
+        self.setCursor(Qt.BlankCursor)
+        self.setStyleSheet("background: #1a1a1a;")
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setGeometry(screen)
+        self.samples = []
+        self.timer_count = int(2.5 * 30)  # 2.5 秒 @ 30fps
+        self.frame = 0
+
+        self.timer = QTimer()
+        self.timer.timeout.connect(self._tick)
+        self.timer.setInterval(33)
+        self.showFullScreen()
+        self.timer.start()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        p.fillRect(self.rect(), QColor(26, 26, 26))
+        cx, cy = w // 2, h // 2
+        progress = self.frame / max(self.timer_count, 1)
+
+        # 中心圆点
+        p.setBrush(QColor(180, 160, 255, 160))
+        p.setPen(Qt.NoPen)
+        r = 30 + 6 * np.sin(self.frame * 0.1)
+        p.drawEllipse(QPoint(cx, cy), r, r)
+
+        # 进度环
+        pen = QPen(QColor(200, 180, 255, 180), 3)
+        p.setPen(pen)
+        p.setBrush(Qt.NoBrush)
+        p.drawEllipse(QPoint(cx, cy), 50, 50)
+
+        p.setPen(QColor(255, 255, 255, 120))
+        p.setFont(QFont("Arial", 18))
+        p.drawText(self.rect(), Qt.AlignCenter, f"注视中心点\n{max(0, self.timer_count - self.frame)//30 + 1} 秒")
+
+        p.end()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.timer.stop()
+            self.close()
+            self.calibration_done.emit()
+
+    def _tick(self):
+        self.frame += 1
+        _, results = self.engine.read_camera()
+        if results and results.multi_face_landmarks:
+            feats = extract_features(results.multi_face_landmarks[0])
+            self.samples.append(feats)
+        self.repaint()
+        if self.frame >= self.timer_count:
+            self._finish()
+
+    def _finish(self):
+        self.timer.stop()
+        if len(self.samples) < 10:
+            self.close()
+            self.calibration_done.emit()
+            return
+
+        X = np.array(self.samples, dtype=np.float32)
+        x_mean = X.mean(axis=0)
+        x_std = X.std(axis=0) + 1e-6
+        X_norm = ((X - x_mean) / x_std).mean(axis=0, keepdims=True)
+
+        calib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration.npz")
+        calib = np.load(calib_path, allow_pickle=True)
+        model = calib["model"].item()
+        screen_w = float(calib["screen_w"])
+        screen_h = float(calib["screen_h"])
+        scale_x = engine.screen_w / screen_w
+        scale_y = engine.screen_h / screen_h
+
+        pred = model.predict(X_norm)[0]
+        pred[0] *= scale_x
+        pred[1] *= scale_y
+
+        # 计算中心偏移
+        cx = engine.screen_w / 2
+        cy = engine.screen_h / 2
+        offset_x = cx - pred[0]
+        offset_y = cy - pred[1]
+
+        print(f"[i] 中心偏移: ({offset_x:.1f}, {offset_y:.1f}) px")
+
+        # 修正整个模型：对所有训练样本的 target 加偏移，重新训练
+        # 简化方案：在引擎中存储 bias 修正量
+        engine.bias_x = offset_x
+        engine.bias_y = offset_y
+
+        self.close()
+        self.calibration_done.emit()
+
+
+def run_center_calibration(engine):
+    """运行中心单点校准，修正漂移。"""
+    window = CenterCalibWindow(engine)
+    loop = QEventLoop()
+    window.calibration_done.connect(loop.quit)
+    loop.exec()

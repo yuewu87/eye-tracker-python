@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt, QTimer
 
 from engine import GazeEngine
-from calibrator import run_calibration
+from calibrator import run_calibration, run_center_calibration
 from widgets import MainWindow, OverlayWindow, CaptureWindow
 
 
@@ -36,6 +36,7 @@ class App:
         # 连接信号
         self.main_window.start_clicked.connect(self._toggle_tracking)
         self.main_window.calibrate_clicked.connect(self._run_calibration)
+        self.main_window.center_calibrate_clicked.connect(self._run_center_calibration)
         self.main_window.hide_clicked.connect(self._toggle_overlay)
         self.main_window.smoothing_changed.connect(self.engine.set_smoothing)
 
@@ -113,6 +114,19 @@ class App:
         calib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration.npz")
         if self.engine.has_calibration(calib_path):
             self.engine.load_calibration(calib_path)
+        self.main_window.show()
+        if was_tracking:
+            self._start_tracking()
+
+    def _run_center_calibration(self):
+        """单点中心校准：注视屏幕中央 2.5 秒修正漂移。"""
+        was_tracking = self.tracking_active
+        if was_tracking:
+            self._stop_tracking()
+        self.engine.pause()
+        self.main_window.hide()
+        run_center_calibration(self.engine)
+        self.engine.resume()
         self.main_window.show()
         if was_tracking:
             self._start_tracking()
