@@ -71,6 +71,8 @@ class App:
         screen_geo = self.app.primaryScreen().geometry()
         self.overlay = OverlayWindow(screen_geo)
         self.capture = CaptureWindow(screen_geo)
+        self.overlay.hide()        # 强制重显确保首次渲染
+        self.overlay.show()
         self.engine.reset_position()
         self.tracking_active = True
         self.overlay_visible = True
