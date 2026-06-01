@@ -11,12 +11,12 @@ from PySide6.QtGui import QPainter, QColor, QFont, QPen
 
 from engine import extract_features
 
-# 5 点校准（四角 + 中心），减少眼部疲劳
+# 5 点校准（四角 + 中心），点靠近屏幕边缘以覆盖全屏范围
 CALIB_POINTS = [
-    (0.1, 0.1), (0.9, 0.1), (0.5, 0.5), (0.1, 0.9), (0.9, 0.9),
+    (0.05, 0.05), (0.95, 0.05), (0.5, 0.5), (0.05, 0.95), (0.95, 0.95),
 ]
 
-SAMPLES_PER_POINT = 60   # 每点采集帧数
+SAMPLES_PER_POINT = 80   # 每点采集帧数（增加边缘覆盖率）
 SETTLE_SECONDS = 0.8     # 注视稳定时间
 PREP_SECONDS = 1.0       # 倒计时准备时间
 
