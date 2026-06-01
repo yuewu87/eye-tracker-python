@@ -27,7 +27,10 @@ conda activate eye-tracker
 
 ## 使用
 
+双击 `run.bat` 启动，或：
+
 ```bash
+conda activate eye-tracker
 python eye_tracker/main.py
 ```
 
