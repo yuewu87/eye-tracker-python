@@ -11,9 +11,9 @@ from PySide6.QtGui import QPainter, QColor, QFont, QPen
 
 from engine import extract_features
 
-# 5 点校准（四角 + 中心），点靠近屏幕边缘以覆盖全屏范围
+# 5 点校准（四角 + 中心），边缘留 8% 避免注视困难
 CALIB_POINTS = [
-    (0.05, 0.05), (0.95, 0.05), (0.5, 0.5), (0.05, 0.95), (0.95, 0.95),
+    (0.08, 0.08), (0.92, 0.08), (0.5, 0.5), (0.08, 0.92), (0.92, 0.92),
 ]
 
 SAMPLES_PER_POINT = 80   # 每点采集帧数（增加边缘覆盖率）
