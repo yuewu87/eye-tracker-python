@@ -3,8 +3,9 @@
 import os
 import sys
 import numpy as np
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QIcon, QPixmap, QColor
 
 from engine import GazeEngine
 from calibrator import run_calibration, run_center_calibration
@@ -12,10 +13,10 @@ from widgets import MainWindow, OverlayWindow, CaptureWindow
 
 
 class App:
-    """应用控制器：管理引擎、窗口和校准/追踪状态切换。"""
-
     def __init__(self):
         self.app = QApplication(sys.argv)
+        self.app.setQuitOnLastWindowClosed(False)  # 关闭窗口不退出
+
         screen = self.app.primaryScreen().geometry()
         self.sw = screen.width()
         self.sh = screen.height()
@@ -28,22 +29,27 @@ class App:
         self.overlay_visible = True
         self._frame = 0
 
+        # 系统托盘
+        self._setup_tray()
+
+        # 主窗口关闭 → 退出程序
+        self.main_window.closeEvent = self._on_main_close
+
         # 连接信号
         self.main_window.start_clicked.connect(self._toggle_tracking)
         self.main_window.calibrate_clicked.connect(self._run_calibration)
         self.main_window.center_calibrate_clicked.connect(self._run_center_calibration)
         self.main_window.hide_clicked.connect(self._toggle_overlay)
         self.main_window.smoothing_changed.connect(self.engine.set_smoothing)
+        self.main_window.hide_panel_clicked.connect(self._hide_panel)
 
         calib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration.npz")
 
-        # 启动摄像头
         self.engine.start_camera()
         if not self.engine.is_camera_ok():
             self.main_window.status_label.setText("摄像头不可用")
             self.main_window.start_btn.setEnabled(False)
 
-        # 无校准文件则自动进入校准
         if not self.engine.has_calibration(calib_path):
             self.main_window.status_label.setText("需要校准...")
             self._run_calibration()
@@ -59,6 +65,42 @@ class App:
 
         self.main_window.show()
 
+    # ── 系统托盘 ──────────────────────────────────────────────────
+
+    def _setup_tray(self):
+        self.tray = QSystemTrayIcon()
+        # 托盘图标
+        pixmap = QPixmap(32, 32)
+        pixmap.fill(QColor(0, 200, 255))
+        self.tray.setIcon(QIcon(pixmap))
+        self.tray.setToolTip("Eye Tracker")
+
+        menu = QMenu()
+        menu.addAction("显示面板", self._show_panel)
+        menu.addAction("退出", self._quit)
+        self.tray.setContextMenu(menu)
+        self.tray.activated.connect(lambda reason: self._show_panel()
+                                    if reason == QSystemTrayIcon.DoubleClick else None)
+        self.tray.show()
+
+    def _hide_panel(self):
+        self.main_window.hide()
+
+    def _show_panel(self):
+        self.main_window.show()
+        self.main_window.raise_()
+
+    def _on_main_close(self, event):
+        self.main_window.hide()  # 关闭 = 隐藏到托盘
+        event.ignore()
+
+    def _quit(self):
+        if self.tracking_active:
+            self._stop_tracking()
+        self.engine.stop_camera()
+        self.tray.hide()
+        self.app.quit()
+
     # ── 追踪控制 ──────────────────────────────────────────────────
 
     def _toggle_tracking(self):
@@ -71,7 +113,7 @@ class App:
         screen_geo = self.app.primaryScreen().geometry()
         self.overlay = OverlayWindow(screen_geo)
         self.capture = CaptureWindow(screen_geo)
-        self.overlay.hide()        # 强制重显确保首次渲染
+        self.overlay.hide()
         self.overlay.show()
         self.engine.reset_position()
         self.tracking_active = True
@@ -141,7 +183,7 @@ class App:
             self.main_window.update_status(False, 0, 0)
 
     def run(self):
-        self.app.exec()
+        sys.exit(self.app.exec())
 
 
 if __name__ == "__main__":

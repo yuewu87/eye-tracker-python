@@ -174,12 +174,13 @@ class MainWindow(QWidget):
     calibrate_clicked = Signal()
     center_calibrate_clicked = Signal()
     hide_clicked = Signal()
+    hide_panel_clicked = Signal()
     smoothing_changed = Signal(float)
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Eye Tracker")
-        self.setFixedSize(400, 280)
+        self.setFixedSize(400, 320)
         self.setWindowFlags(Qt.WindowCloseButtonHint | Qt.WindowStaysOnTopHint)
         self.setStyleSheet("background: #1a1a1a;")
         self._prev_tracking = None
@@ -273,6 +274,18 @@ class MainWindow(QWidget):
         btn_row.addWidget(self.cal_btn)
         btn_row.addWidget(self.center_cal_btn)
         layout.addLayout(btn_row)
+
+        # 第二行：隐藏面板
+        row2 = QHBoxLayout()
+        self.hide_panel_btn = QPushButton("隐藏面板")
+        self.hide_panel_btn.setStyleSheet("""
+            QPushButton { padding: 8px; font-size: 12px; border-radius: 4px;
+            border: 1px solid #555; background: transparent; color: #777; }
+            QPushButton:hover { border-color: #888; color: #ccc; }
+        """)
+        self.hide_panel_btn.clicked.connect(self.hide_panel_clicked)
+        row2.addWidget(self.hide_panel_btn)
+        layout.addLayout(row2)
         self.setLayout(layout)
 
     def update_status(self, tracking, gaze_x, gaze_y):
