@@ -1,0 +1,12 @@
+# Claude Code
+.claude/
+
+# Superpowers
+.superpowers/
+
+# IDE
+.vscode/
+
+# User data
+img/
+*.txt
