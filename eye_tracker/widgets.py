@@ -29,9 +29,9 @@ def win_set_exstyle(hwnd, flags):
 # ═══════════════════════════════════════════════════════════════════
 
 _R = 56                # 光圈基础半径
-_SPEED_THRESH = 15.0   # 速度阈值
-_TAIL_LEN = 0.35       # 拖尾长度系数
-_TAIL_SEG = 3          # 拖尾段数
+_SPEED_THRESH = 12.0   # 速度阈值（降低，更容易触发拖尾）
+_TAIL_LEN = 0.65       # 拖尾长度系数
+_TAIL_SEG = 5          # 拖尾段数
 
 
 def draw_glow(painter, x, y, vx, vy, pulse):
@@ -61,9 +61,9 @@ def draw_glow(painter, x, y, vx, vy, pulse):
             t = (i + 1) / _TAIL_SEG
             tx = x + nx * tail_len * t
             ty = y + ny * tail_len * t
-            seg_r = _R + _R * t * 0.6
-            alpha = int(100 * (1.0 - t))
-            pen = QPen(QColor(160, 100, 240, alpha), 1.5)
+            seg_r = _R + _R * t * 0.8
+            alpha = int(140 * (1.0 - t))
+            pen = QPen(QColor(160, 100, 240, alpha), 2.5)
             pen.setCapStyle(Qt.RoundCap)
             painter.setPen(pen)
             painter.setBrush(Qt.NoBrush)
