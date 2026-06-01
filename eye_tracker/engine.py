@@ -64,40 +64,7 @@ def _compute_head_pose(face_landmarks):
     return yaw, pitch, roll
 
 
-def _refine_iris(frame, eye_landmarks):
-    """在原始分辨率帧上裁剪眼部区域，用阈值法精确定位瞳孔中心。
-
-    返回 (cx_norm, cy_norm) — 归一化 [0,1] 坐标，或 None。
-    """
-    h, w = frame.shape[:2]
-    xs = [int(lm.x * w) for lm in eye_landmarks]
-    ys = [int(lm.y * h) for lm in eye_landmarks]
-    x1, x2 = max(0, min(xs) - 8), min(w, max(xs) + 8)
-    y1, y2 = max(0, min(ys) - 8), min(h, max(ys) + 8)
-
-    if x2 <= x1 or y2 <= y1:
-        return None
-
-    roi = frame[y1:y2, x1:x2]
-    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-    # 自适应阈值提取瞳孔（瞳孔是暗区）
-    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    if not contours:
-        return None
-    # 最大轮廓为瞳孔
-    c = max(contours, key=cv2.contourArea)
-    M = cv2.moments(c)
-    if M["m00"] < 5:
-        return None
-    cx_roi = M["m10"] / M["m00"]
-    cy_roi = M["m01"] / M["m00"]
-    # 转换回全图归一化坐标
-    return (x1 + cx_roi) / w, (y1 + cy_roi) / h
-
-
-def extract_features(face_landmarks, bgr_frame=None):
+def extract_features(face_landmarks):
     """提取 10 维视线特征（眼距归一化 + 3D 头部姿态）。
 
     返回 float32[10]:
@@ -105,22 +72,8 @@ def extract_features(face_landmarks, bgr_frame=None):
     """
     lm = face_landmarks.landmark
 
-    # 虹膜中心（优先用 ROI 精修结果）
-    if bgr_frame is not None:
-        ri_raw = _refine_iris(bgr_frame, [lm[i] for i in RIGHT_IRIS])
-        li_raw = _refine_iris(bgr_frame, [lm[i] for i in LEFT_IRIS])
-    else:
-        ri_raw, li_raw = None, None
-
-    if ri_raw is None:
-        ri_raw = (np.mean([lm[i].x for i in RIGHT_IRIS]),
-                  np.mean([lm[i].y for i in RIGHT_IRIS]))
-    if li_raw is None:
-        li_raw = (np.mean([lm[i].x for i in LEFT_IRIS]),
-                  np.mean([lm[i].y for i in LEFT_IRIS]))
-
-    ri = np.array(ri_raw)
-    li = np.array(li_raw)
+    ri = np.mean([[lm[i].x, lm[i].y] for i in RIGHT_IRIS], axis=0)
+    li = np.mean([[lm[i].x, lm[i].y] for i in LEFT_IRIS], axis=0)
 
     re = np.array([(lm[R_EYE_OUTER].x + lm[R_EYE_INNER].x) / 2,
                     (lm[R_EYE_OUTER].y + lm[R_EYE_INNER].y) / 2])
@@ -328,8 +281,7 @@ class GazeEngine(QObject):
             return
 
         if results.multi_face_landmarks:
-            # 传入 BGR 帧用于眼部 ROI 瞳孔精修
-            feats = extract_features(results.multi_face_landmarks[0], frame)
+            feats = extract_features(results.multi_face_landmarks[0])
 
             if self._has_calib:
                 px, py = self.predict(feats)
