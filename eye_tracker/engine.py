@@ -51,7 +51,7 @@ def extract_features(face_landmarks):
 class OneEuroFilter:
     """1€ Filter: 低速时截止频率低（平滑），高速时截止频率高（灵敏）。"""
 
-    def __init__(self, dt=1/25, min_cutoff=1.0, beta=0.01):
+    def __init__(self, dt=1/25, min_cutoff=0.4, beta=0.005):
         self.dt = dt
         self.min_cutoff = min_cutoff
         self.beta = beta
@@ -84,9 +84,9 @@ class OneEuroFilter:
         return self.x_prev.copy()
 
     def set_smoothness(self, factor: float):
-        # 0=灵敏(freq=3) 1=平滑(freq=0.2)
-        self.min_cutoff = 3.0 - factor * 2.8
-        self.beta = 0.001 + factor * 0.05
+        # 0=灵敏(freq=2) 1=极平滑(freq=0.1)
+        self.min_cutoff = 2.0 - factor * 1.9
+        self.beta = 0.001 + factor * 0.03
 
     def reset(self):
         self.x_prev = None
