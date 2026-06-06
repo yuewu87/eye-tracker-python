@@ -155,7 +155,8 @@ class CalibrationWindow(QWidget):
             self.phase_timer = 0
             self.collected = 0
         elif self.phase == "collect":
-            self._collect_frame()
+            if self.phase_timer >= 0.5:  # 前 0.5 秒静默过渡，等眼睛盯稳
+                self._collect_frame()
             if self.collected >= self.samples_needed:
                 self._filter_samples()
                 self.current_idx += 1
