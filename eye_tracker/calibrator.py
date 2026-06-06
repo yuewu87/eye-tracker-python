@@ -229,7 +229,8 @@ class CalibrationWindow(QWidget):
             X_all = np.array([s[0] for s in self.samples], dtype=np.float64)
             y_all = np.array([s[1] for s in self.samples], dtype=np.float64)
             Xn = (X_all - self.x_mean) / self.x_std
-            y_pred = model.predict(Xn)
+            Xn_poly = poly.transform(Xn)
+            y_pred = model.predict(Xn_poly)
             errors = np.sqrt(((y_pred - y_all) ** 2).sum(axis=1))
             print(f"[i] 校准误差: 平均={errors.mean():.1f}px 最大={errors.max():.1f}px")
 
