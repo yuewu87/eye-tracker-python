@@ -36,19 +36,16 @@ class IRSource:
         return True
 
     def read(self):
-        """返回 (True, bgr_frame) 最多跳过 10 帧暗帧。"""
-        for _ in range(10):
-            try:
-                size = struct.unpack("<i", self._recv_exact(4))[0]
-                data = self._recv_exact(size)
-                bgra = np.frombuffer(data, dtype=np.uint8).reshape(self.height, self.width, 4)
-                bgr = bgra[:, :, :3]
-                self._latest = bgr
-                if bgr.mean() > 20:
-                    return True, bgr
-            except Exception:
-                break
-        return False, self._latest
+        """返回 (True, bgr_frame)。C# 桥已过滤暗帧。"""
+        try:
+            size = struct.unpack("<i", self._recv_exact(4))[0]
+            data = self._recv_exact(size)
+            bgra = np.frombuffer(data, dtype=np.uint8).reshape(self.height, self.width, 4)
+            bgr = bgra[:, :, :3]
+            self._latest = bgr
+            return True, bgr
+        except Exception:
+            return False, self._latest
 
     def release(self):
         self.sock.close()

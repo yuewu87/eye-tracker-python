@@ -59,7 +59,9 @@ reader.FrameArrived += (_, _) =>
 {
     var f = reader.TryAcquireLatestFrame();
     var vf = f?.VideoMediaFrame;
-    var b = vf?.SoftwareBitmap;
+    // 只发送 IR LED 点亮帧，跳过暗帧
+    if (vf?.InfraredMediaFrame?.IsIlluminated != true) return;
+    var b = vf.SoftwareBitmap;
     if (b is null) return;
     if (b.BitmapPixelFormat != BitmapPixelFormat.Bgra8)
         b = SoftwareBitmap.Convert(b, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
