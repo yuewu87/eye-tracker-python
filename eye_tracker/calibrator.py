@@ -340,6 +340,13 @@ class CenterCalibWindow(QWidget):
         scale_x = self.engine.screen_w / screen_w
         scale_y = self.engine.screen_h / screen_h
 
+        # 多项式变换（与主校准一致）
+        if "poly_degree" in calib:
+            from sklearn.preprocessing import PolynomialFeatures
+            poly = PolynomialFeatures(degree=int(calib["poly_degree"]), include_bias=False)
+            poly.fit(np.zeros((1, int(calib["poly_features_in"]))))
+            X_norm = poly.transform(X_norm)
+
         pred = model.predict(X_norm)[0]
         pred[0] *= scale_x
         pred[1] *= scale_y
