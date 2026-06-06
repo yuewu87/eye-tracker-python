@@ -3,17 +3,19 @@
 import os
 import sys
 import numpy as np
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.multioutput import MultiOutputRegressor
+from sklearn.linear_model import RidgeCV
+from sklearn.preprocessing import PolynomialFeatures
 from PySide6.QtWidgets import QApplication, QWidget
 from PySide6.QtCore import Qt, QTimer, QPoint, Signal, QEventLoop
 from PySide6.QtGui import QPainter, QColor, QFont, QPen
 
 from engine import extract_features
 
-# 5 点校准（四角 + 中心），边缘留 8% 避免注视困难
+# 7 点校准：覆盖全屏 + 上行加强（补偿摄像头在下巴位置的向上视角盲区）
 CALIB_POINTS = [
-    (0.08, 0.08), (0.92, 0.08), (0.5, 0.5), (0.08, 0.92), (0.92, 0.92),
+    (0.08, 0.05), (0.50, 0.05), (0.92, 0.05),   # 上行：顶部
+    (0.08, 0.92), (0.92, 0.92),                   # 下行：底部
+    (0.50, 0.50), (0.50, 0.92),                   # 中心 + 下中
 ]
 
 SAMPLES_RGB = 120
@@ -200,13 +202,13 @@ class CalibrationWindow(QWidget):
             self.x_std  = X.std(axis=0) + 1e-6
             X_norm = (X - self.x_mean) / self.x_std
 
-            # 梯度提升回归（MultiOutput 包装以支持 x,y 双输出）
-            gbr = GradientBoostingRegressor(
-                n_estimators=50, max_depth=3, learning_rate=0.05,
-                min_samples_leaf=10, random_state=42)
-            model = MultiOutputRegressor(gbr)
-            model.fit(X_norm, y)
-            print(f"[i] GBR 训练完成")
+            # 多项式特征 + Ridge 回归 → 连续平滑曲面
+            poly = PolynomialFeatures(degree=2, include_bias=False)
+            X_poly = poly.fit_transform(X_norm)
+            n_feat = X_poly.shape[1]
+            model = RidgeCV(alphas=[0.01, 0.1, 0.5, 1.0, 5.0, 10.0, 50.0])
+            model.fit(X_poly, y)
+            print(f"[i] Poly(deg=2): 10→{n_feat} 维, best α={model.alpha_}")
 
             screen = QApplication.primaryScreen().geometry()
             # IR 模式使用独立的校准文件
@@ -217,7 +219,9 @@ class CalibrationWindow(QWidget):
                      x_std=self.x_std.astype(np.float64),
                      screen_w=screen.width(),
                      screen_h=screen.height(),
-                     model=model)
+                     model=model,
+                     poly_degree=2,
+                     poly_features_in=10)
             print(f"[OK] 校准参数已保存: {save_path}")
             print(f"     样本数: {len(self.samples)}, 屏幕: {screen.width()}x{screen.height()}")
 

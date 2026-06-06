@@ -10,6 +10,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import cv2
 import mediapipe as mp
 import numpy as np
+from sklearn.preprocessing import PolynomialFeatures
 from PySide6.QtCore import QObject, Signal, QTimer
 
 # ═══════════════════════════════════════════════════════════════════
@@ -183,6 +184,7 @@ class GazeEngine(QObject):
         self.model = None
         self.x_mean = None
         self.x_std = None
+        self._poly = None    # PolynomialFeatures 转换器
         self.scale_x = 1.0
         self.scale_y = 1.0
         self._has_calib = False
@@ -263,16 +265,28 @@ class GazeEngine(QObject):
         self.x_std = calib["x_std"]
         n_feat = len(self.x_mean)
         if n_feat not in (7, 10):
-            print(f"[!] 校准特征维度 {n_feat} 不兼容")
+            print(f"[!] 校准特征维度 {n_feat} 不兼容，请重新校准")
             self._has_calib = False
             return
         self.model = calib["model"].item()
         self.scale_x = self.screen_w / float(calib["screen_w"])
         self.scale_y = self.screen_h / float(calib["screen_h"])
+
+        # 重建多项式特征转换器
+        if "poly_degree" in calib:
+            degree = int(calib["poly_degree"])
+            n_in = int(calib["poly_features_in"])
+            self._poly = PolynomialFeatures(degree=degree, include_bias=False)
+            self._poly.fit(np.zeros((1, n_in)))
+        else:
+            self._poly = None
+
         self._has_calib = True
 
     def predict(self, features: np.ndarray):
         x_norm = ((features - self.x_mean) / self.x_std).reshape(1, -1)
+        if self._poly is not None:
+            x_norm = self._poly.transform(x_norm)
         pred = self.model.predict(x_norm)[0]
         pred[0] = pred[0] * self.scale_x + self.bias_x
         pred[1] = pred[1] * self.scale_y + self.bias_y
