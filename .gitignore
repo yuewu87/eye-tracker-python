@@ -10,3 +10,17 @@
 # User data
 img/
 *.txt
+
+# Build artifacts
+ir_bridge/bin/
+ir_bridge/obj/
+
+# Downloaded tools
+ir_camera_view/
+
+# Test scripts
+*_test.py
+test_*.py
+
+# Docs
+docs/
