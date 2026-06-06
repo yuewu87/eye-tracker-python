@@ -237,7 +237,22 @@ class GazeEngine(QObject):
         self._frame_w = w
         self._frame_h = h
 
-        # 人脸裁剪归一化：上帧眼角 → 裁剪当前帧 → 放大到标准眼距
+        # 首帧：全图检测 → 拿到眼角位置
+        if self._eye_roi is None:
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            rgb.flags.writeable = False
+            results = self.face_mesh.process(rgb)
+            if results and results.multi_face_landmarks:
+                lm = results.multi_face_landmarks[0].landmark
+                ex1 = int(lm[R_EYE_OUTER].x * w)
+                ey1 = int(lm[R_EYE_OUTER].y * h)
+                ex2 = int(lm[L_EYE_OUTER].x * w)
+                ey2 = int(lm[L_EYE_OUTER].y * h)
+                self._eye_roi = (ex1, ey1, ex2, ey2)
+                # 立即用裁剪重读同一帧——所有帧统一用裁剪空间
+                results = None  # 丢弃全图结果
+
+        # 人脸裁剪归一化
         if self._eye_roi is not None:
             ex1, ey1, ex2, ey2 = self._eye_roi
             cx, cy = (ex1 + ex2) // 2, (ey1 + ey2) // 2
