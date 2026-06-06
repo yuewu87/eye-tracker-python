@@ -19,8 +19,7 @@ CALIB_POINTS = [
 ]
 
 SAMPLES_RGB = 120
-SAMPLES_IR  = 30   # IR 帧率低，减半采样
-SETTLE_SECONDS = 0.8
+SAMPLES_IR  = 30
 PREP_SECONDS = 1.0
 
 
@@ -79,24 +78,18 @@ class CalibrationWindow(QWidget):
             cx = int(px * w)
             cy = int(py * h)
 
-            # 十字准星 + 呼吸动画（所有阶段动态，幅度递减）
+            # 十字准星 + 呼吸动画
             t = self.phase_timer
             if self.phase == "prep":
                 pulse = 0.5 + 0.5 * np.sin(t * 4)
                 length = 30.0 + 15.0 * pulse
                 gap = 6.0 + 4.0 * pulse
-                alpha = 80 + int(80 * pulse)
-                color = QColor(200, 160, 255, alpha)
-            elif self.phase == "settle":
-                pulse = 0.5 + 0.5 * np.sin(t * 3)
-                length = 42.0 + 6.0 * pulse
-                gap = 7.0 + 2.0 * pulse
-                color = QColor(180, 140, 240, 180 + int(40 * pulse))
+                color = QColor(200, 160, 255, 80 + int(80 * pulse))
             else:
                 pulse = 0.5 + 0.5 * np.sin(t * 3)
-                length = 34.0 + 5.0 * pulse
-                gap = 6.0 + 1.5 * pulse
-                color = QColor(100, 200, 255, 180 + int(50 * pulse))
+                length = 34.0 + 8.0 * pulse
+                gap = 6.0 + 3.0 * pulse
+                color = QColor(120, 200, 255, 140 + int(80 * pulse))
                 bar_w, bar_h = 300, 6
                 bx = (w - bar_w) // 2
                 by_ = h - 50
@@ -127,7 +120,7 @@ class CalibrationWindow(QWidget):
 
             p.setPen(QColor(120, 120, 120))
             p.setFont(QFont("Arial", 13))
-            labels = {"prep": "准备注视", "settle": "保持注视...", "collect": "采集中..."}
+            labels = {"prep": "准备注视", "collect": "采集中..."}
             p.drawText(20, 30, f"[{self.current_idx + 1}/{len(CALIB_POINTS)}]  {labels[self.phase]}")
             p.end()
         except Exception as e:
@@ -158,9 +151,6 @@ class CalibrationWindow(QWidget):
         self.phase_timer += dt
 
         if self.phase == "prep" and self.phase_timer >= PREP_SECONDS:
-            self.phase = "settle"
-            self.phase_timer = 0
-        elif self.phase == "settle" and self.phase_timer >= SETTLE_SECONDS:
             self.phase = "collect"
             self.phase_timer = 0
             self.collected = 0
