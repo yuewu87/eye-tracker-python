@@ -301,21 +301,30 @@ class CenterCalibWindow(QWidget):
         cx, cy = w // 2, h // 2
         progress = self.frame / max(self.timer_count, 1)
 
-        # 中心圆点
-        p.setBrush(QColor(180, 160, 255, 160))
+        # 十字准星 + 呼吸
+        pulse = 0.5 + 0.5 * np.sin(self.frame * 0.15)
+        length = 40.0 + 12.0 * pulse
+        gap = 7.0 + 4.0 * pulse
+        alpha = 120 + int(80 * pulse)
+        pen = QPen(QColor(180, 140, 240, alpha), 3)
+        pen.setCapStyle(Qt.RoundCap)
+        p.setPen(pen)
+        p.drawLine(cx, int(cy - gap), cx, int(cy - length))
+        p.drawLine(cx, int(cy + gap), cx, int(cy + length))
+        p.drawLine(int(cx - gap), cy, int(cx - length), cy)
+        p.drawLine(int(cx + gap), cy, int(cx + length), cy)
         p.setPen(Qt.NoPen)
-        r = 30 + 6 * np.sin(self.frame * 0.1)
-        p.drawEllipse(QPoint(cx, cy), r, r)
+        p.setBrush(QColor(255, 255, 255, 200))
+        p.drawEllipse(QPoint(cx, cy), 2, 2)
 
         # 进度环
-        pen = QPen(QColor(200, 180, 255, 180), 3)
-        p.setPen(pen)
+        p.setPen(QPen(QColor(200, 180, 255, 180), 2))
         p.setBrush(Qt.NoBrush)
         p.drawEllipse(QPoint(cx, cy), 50, 50)
 
         p.setPen(QColor(255, 255, 255, 120))
         p.setFont(QFont("Arial", 18))
-        p.drawText(self.rect(), Qt.AlignCenter, f"注视中心点\n{max(0, self.timer_count - self.frame)//30 + 1} 秒")
+        p.drawText(self.rect(), Qt.AlignCenter, f"注视中心十字\n{max(0, self.timer_count - self.frame)//30 + 1} 秒")
 
         p.end()
 
