@@ -13,7 +13,7 @@ from engine import extract_features
 
 # 7 点校准：覆盖全屏 + 上行加强（补偿摄像头在下巴位置的向上视角盲区）
 CALIB_POINTS = [
-    (0.03, 0.03), (0.50, 0.03), (0.97, 0.03),   # 上行：顶部极边缘
+    (0.03, 0.08), (0.50, 0.06), (0.97, 0.08),   # 上行：留 6-8% 避免眼皮遮挡
     (0.03, 0.97), (0.97, 0.97),                   # 下行：底部极边缘
     (0.50, 0.50), (0.50, 0.97),                   # 中心 + 下中
 ]
@@ -79,19 +79,24 @@ class CalibrationWindow(QWidget):
             cx = int(px * w)
             cy = int(py * h)
 
-            # 十字准星 + 呼吸动画
+            # 十字准星 + 呼吸动画（所有阶段动态，幅度递减）
+            t = self.phase_timer
             if self.phase == "prep":
-                pulse = 0.5 + 0.5 * np.sin(self.phase_timer * 4)
+                pulse = 0.5 + 0.5 * np.sin(t * 4)
                 length = 30.0 + 15.0 * pulse
                 gap = 6.0 + 4.0 * pulse
                 alpha = 80 + int(80 * pulse)
                 color = QColor(200, 160, 255, alpha)
             elif self.phase == "settle":
-                length, gap = 45.0, 8.0
-                color = QColor(180, 140, 240, 200)
+                pulse = 0.5 + 0.5 * np.sin(t * 2)
+                length = 42.0 + 6.0 * pulse
+                gap = 7.0 + 2.0 * pulse
+                color = QColor(180, 140, 240, 180 + int(40 * pulse))
             else:
-                length, gap = 36.0, 6.0
-                color = QColor(120, 200, 255, 220)
+                pulse = 0.5 + 0.5 * np.sin(t * 1.5)
+                length = 34.0 + 5.0 * pulse
+                gap = 6.0 + 1.5 * pulse
+                color = QColor(100, 200, 255, 180 + int(50 * pulse))
                 bar_w, bar_h = 300, 6
                 bx = (w - bar_w) // 2
                 by_ = h - 50
