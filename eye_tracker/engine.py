@@ -190,9 +190,8 @@ class GazeEngine(QObject):
         self.bias_x = 0.0
         self.bias_y = 0.0
 
-        self._face_roi = None   # (x, y, w, h) 上帧人脸区域
-        self._frame_w = 1920     # 摄像头帧宽
-        self._frame_h = 1080     # 摄像头帧高
+        self._frame_w = 1920
+        self._frame_h = 1080
 
         self.kf = KalmanFilter()
         self.timer = QTimer()
@@ -293,32 +292,6 @@ class GazeEngine(QObject):
         self._frame_w = w
         self._frame_h = h
 
-        # 人脸区域裁剪放大：用上一帧的位置预测当前帧人脸区域
-        if self._face_roi is not None:
-            fx, fy, fw, fh = self._face_roi
-            # 扩大 50% 边距，确保人脸不会跑出裁剪区
-            margin_x = int(fw * 0.5)
-            margin_y = int(fh * 0.5)
-            x1 = max(0, fx - margin_x)
-            y1 = max(0, fy - margin_y)
-            x2 = min(w, fx + fw + margin_x)
-            y2 = min(h, fy + fh + margin_y)
-            if x2 > x1 and y2 > y1:
-                face_roi = frame[y1:y2, x1:x2]
-                # 放大到 640 高
-                scale = 640 / max(face_roi.shape[0], 1)
-                face_roi = cv2.resize(face_roi, None, fx=scale, fy=scale)
-                rgb = cv2.cvtColor(face_roi, cv2.COLOR_BGR2RGB)
-                rgb.flags.writeable = False
-                results = self.face_mesh.process(rgb)
-                # 将 landmarks 映射回原图坐标
-                if results.multi_face_landmarks:
-                    for lm in results.multi_face_landmarks[0].landmark:
-                        lm.x = (lm.x * face_roi.shape[1] / scale + x1) / w
-                        lm.y = (lm.y * face_roi.shape[0] / scale + y1) / h
-                return frame, results
-
-        # 首帧或无先验：全图处理
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         rgb.flags.writeable = False
         results = self.face_mesh.process(rgb)
@@ -346,15 +319,7 @@ class GazeEngine(QObject):
             return
 
         if results.multi_face_landmarks:
-            lm = results.multi_face_landmarks[0].landmark
             feats = extract_features(results.multi_face_landmarks[0])
-
-            # 更新人脸 ROI（像素坐标）用于下一帧裁剪放大
-            xs = [l.x for l in lm]
-            ys = [l.y for l in lm]
-            self._face_roi = (int(min(xs) * self._frame_w), int(min(ys) * self._frame_h),
-                               int((max(xs) - min(xs)) * self._frame_w),
-                               int((max(ys) - min(ys)) * self._frame_h))
 
             if self._has_calib:
                 px, py = self.predict(feats)

@@ -296,6 +296,7 @@ class CenterCalibWindow(QWidget):
 
     def _finish(self):
         self.timer.stop()
+        self.frame = self.timer_count + 1  # 防止 _tick 再次触发 _finish
         if len(self.samples) < 10:
             self.close()
             self.calibration_done.emit()
