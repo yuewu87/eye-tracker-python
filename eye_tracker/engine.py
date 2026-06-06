@@ -165,10 +165,10 @@ class GazeEngine(QObject):
         self.screen_h = screen_h
         self.use_ir = use_ir
 
-        # IR 模式：低分辨率下放大虹膜偏移特征
+        # IR 模式：不额外缩放，让模型自己学习映射
         if use_ir:
             import engine as eng
-            eng._FEATURE_SCALE = 5.0
+            eng._FEATURE_SCALE = 1.0
 
         self.gaze_x = screen_w / 2.0
         self.gaze_y = screen_h / 2.0

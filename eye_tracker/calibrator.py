@@ -16,9 +16,10 @@ CALIB_POINTS = [
     (0.08, 0.08), (0.92, 0.08), (0.5, 0.5), (0.08, 0.92), (0.92, 0.92),
 ]
 
-SAMPLES_PER_POINT = 80   # 每点采集帧数（增加边缘覆盖率）
-SETTLE_SECONDS = 0.8     # 注视稳定时间
-PREP_SECONDS = 1.0       # 倒计时准备时间
+self.samples_needed_RGB = 80
+self.samples_needed_IR  = 30   # IR 帧率低，减半采样
+SETTLE_SECONDS = 0.8
+PREP_SECONDS = 1.0
 
 
 class CalibrationWindow(QWidget):
@@ -39,11 +40,14 @@ class CalibrationWindow(QWidget):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setGeometry(screen)
 
-        self.current_idx = 0          # 当前校准点索引
-        self.phase = "prep"           # prep → settle → collect
-        self.phase_timer = 0.0        # 当前阶段计时器
-        self.collected = 0            # 当前点已采集帧数
-        self.samples = []             # [(features, target), ...]
+        self.current_idx = 0
+        self.phase = "prep"
+        self.phase_timer = 0.0
+        self.collected = 0
+        self.samples = []
+        self.samples_needed = self.samples_needed_IR if getattr(engine, 'use_ir', False) else self.samples_needed_RGB
+        if engine.use_ir:
+            print("[i] IR 模式，减少采样数")
 
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
@@ -86,7 +90,7 @@ class CalibrationWindow(QWidget):
                 bx = (w - bar_w) // 2
                 by_ = h - 50
                 p.fillRect(bx, by_, bar_w, bar_h, QColor(60, 60, 60))
-                p.fillRect(bx, by_, int(bar_w * self.collected / SAMPLES_PER_POINT), bar_h, QColor(0, 200, 255))
+                p.fillRect(bx, by_, int(bar_w * self.collected / self.samples_needed), bar_h, QColor(0, 200, 255))
 
             p.setBrush(color)
             p.setPen(Qt.NoPen)
@@ -139,7 +143,7 @@ class CalibrationWindow(QWidget):
             self.collected = 0
         elif self.phase == "collect":
             self._collect_frame()
-            if self.collected >= SAMPLES_PER_POINT:
+            if self.collected >= self.samples_needed:
                 self.current_idx += 1
                 self.phase = "prep"
                 self.phase_timer = 0
