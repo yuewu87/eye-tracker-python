@@ -182,8 +182,8 @@ class CalibrationWindow(QWidget):
 
             # 梯度提升回归（MultiOutput 包装以支持 x,y 双输出）
             gbr = GradientBoostingRegressor(
-                n_estimators=100, max_depth=4, learning_rate=0.1,
-                random_state=42)
+                n_estimators=50, max_depth=3, learning_rate=0.05,
+                min_samples_leaf=10, random_state=42)
             model = MultiOutputRegressor(gbr)
             model.fit(X_norm, y)
             print(f"[i] GBR 训练完成")

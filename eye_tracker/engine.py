@@ -126,7 +126,7 @@ class KalmanFilter:
         self.H = np.array([[1, 0, 0, 0],
                            [0, 1, 0, 0]])
         self.Q = np.diag([0.5, 0.5, 2.0, 2.0])
-        self.R = np.eye(2) * 30
+        self.R = np.eye(2) * 80   # 默认更平滑
         self.initialized = False
 
     def update(self, z: np.ndarray):
