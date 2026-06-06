@@ -16,8 +16,8 @@ CALIB_POINTS = [
     (0.08, 0.08), (0.92, 0.08), (0.5, 0.5), (0.08, 0.92), (0.92, 0.92),
 ]
 
-self.samples_needed_RGB = 80
-self.samples_needed_IR  = 30   # IR 帧率低，减半采样
+SAMPLES_RGB = 80
+SAMPLES_IR  = 30   # IR 帧率低，减半采样
 SETTLE_SECONDS = 0.8
 PREP_SECONDS = 1.0
 
@@ -45,7 +45,7 @@ class CalibrationWindow(QWidget):
         self.phase_timer = 0.0
         self.collected = 0
         self.samples = []
-        self.samples_needed = self.samples_needed_IR if getattr(engine, 'use_ir', False) else self.samples_needed_RGB
+        self.samples_needed = SAMPLES_IR if getattr(engine, 'use_ir', False) else SAMPLES_RGB
         if engine.use_ir:
             print("[i] IR 模式，减少采样数")
 
