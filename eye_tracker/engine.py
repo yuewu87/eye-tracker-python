@@ -251,15 +251,15 @@ class GazeEngine(QObject):
                 crop_eye_dist = np.linalg.norm([ex2 - ex1, ey2 - ey1])
                 scale = 200.0 / max(crop_eye_dist, 1.0)
                 crop = cv2.resize(crop, None, fx=scale, fy=scale)
-                cr_h, cr_w = crop.shape[:2]
+                # 保存裁剪参数供 _tick 中 eye_roi 反算
+                self._cr_w, self._cr_h = crop.shape[1], crop.shape[0]
+                self._cr_scale = scale
+                self._cr_x1, self._cr_y1 = x1, y1
                 rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
                 rgb.flags.writeable = False
                 results = self.face_mesh.process(rgb)
-                # 将 landmarks 映射回原图归一化坐标
-                if results.multi_face_landmarks:
-                    for lm_pt in results.multi_face_landmarks[0].landmark:
-                        lm_pt.x = (lm_pt.x * cr_w / scale + x1) / w
-                        lm_pt.y = (lm_pt.y * cr_h / scale + y1) / h
+                # 不再映射回原图 —— landmarks 保持在归一化人脸坐标中
+                # 特征提取时眼距始终 ≈200px，头距不变
                 return frame, results
 
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -292,10 +292,19 @@ class GazeEngine(QObject):
             lm = results.multi_face_landmarks[0].landmark
             feats = extract_features(results.multi_face_landmarks[0])
 
-            self._eye_roi = (int(lm[R_EYE_OUTER].x * self._frame_w),
-                              int(lm[R_EYE_OUTER].y * self._frame_h),
-                              int(lm[L_EYE_OUTER].x * self._frame_w),
-                              int(lm[L_EYE_OUTER].y * self._frame_h))
+            # 眼角坐标：从裁剪空间映射回原图
+            if self._eye_roi is not None:
+                s = self._cr_scale
+                r_ox = (lm[R_EYE_OUTER].x * self._cr_w / s + self._cr_x1)
+                r_oy = (lm[R_EYE_OUTER].y * self._cr_h / s + self._cr_y1)
+                l_ox = (lm[L_EYE_OUTER].x * self._cr_w / s + self._cr_x1)
+                l_oy = (lm[L_EYE_OUTER].y * self._cr_h / s + self._cr_y1)
+                self._eye_roi = (int(r_ox), int(r_oy), int(l_ox), int(l_oy))
+            else:
+                self._eye_roi = (int(lm[R_EYE_OUTER].x * self._frame_w),
+                                  int(lm[R_EYE_OUTER].y * self._frame_h),
+                                  int(lm[L_EYE_OUTER].x * self._frame_w),
+                                  int(lm[L_EYE_OUTER].y * self._frame_h))
 
             if self._has_calib:
                 px, py = self.predict(feats)
