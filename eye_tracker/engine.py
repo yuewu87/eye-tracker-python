@@ -322,7 +322,12 @@ class GazeEngine(QObject):
             feats = extract_features(results.multi_face_landmarks[0])
 
             if self._has_calib:
-                px, py = self.predict(feats)
+                # 离群检测：特征距校准均值 > 4 个标准差 → 丢弃
+                z_score = np.abs((feats - self.x_mean) / self.x_std).max()
+                if z_score < 4.0:
+                    px, py = self.predict(feats)
+                else:
+                    px, py = self.gaze_x, self.gaze_y
             else:
                 px = float(np.clip(feats[0] + 0.5, 0, 1)) * self.screen_w
                 py = float(np.clip(feats[2] + 0.5, 0, 1)) * self.screen_h
