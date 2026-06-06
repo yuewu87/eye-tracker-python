@@ -99,9 +99,15 @@ def extract_features(face_landmarks):
 
     yaw, pitch, roll = _compute_head_pose(face_landmarks)
 
-    return np.array([dr[0], dr[1], dl[0], dl[1],
+    # IR 模式：低分辨率下特征值太小，放大虹膜偏移
+    scale = _FEATURE_SCALE if eye_dist > 1e-6 else 1.0
+    return np.array([dr[0] * scale, dr[1] * scale,
+                     dl[0] * scale, dl[1] * scale,
                      nose_dx, nose_dy, eye_dist_log,
                      yaw, pitch, roll], dtype=np.float32)
+
+
+_FEATURE_SCALE = 1.0   # 默认不缩放，IR 模式设为更大值
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -158,6 +164,11 @@ class GazeEngine(QObject):
         self.screen_w = screen_w
         self.screen_h = screen_h
         self.use_ir = use_ir
+
+        # IR 模式：低分辨率下放大虹膜偏移特征
+        if use_ir:
+            import engine as eng
+            eng._FEATURE_SCALE = 5.0
 
         self.gaze_x = screen_w / 2.0
         self.gaze_y = screen_h / 2.0
