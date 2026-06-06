@@ -45,29 +45,45 @@ def extract_features(face_landmarks):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# EMA 指数平滑 — 简单但稳定
+# Kalman 滤波器
 # ═══════════════════════════════════════════════════════════════════
 
-class EMAFilter:
-    """指数加权移动平均。alpha 越小越平滑。"""
+class KalmanFilter:
+    def __init__(self, dt=1/25):
+        self.dt = dt
+        self.x = np.zeros(4)
+        self.P = np.eye(4) * 500
+        self.F = np.array([[1, 0, dt, 0],
+                           [0, 1, 0, dt],
+                           [0, 0, 1,  0],
+                           [0, 0, 0,  1]])
+        self.H = np.array([[1, 0, 0, 0],
+                           [0, 1, 0, 0]])
+        self.Q = np.diag([0.5, 0.5, 2.0, 2.0])
+        self.R = np.eye(2) * 40
+        self.initialized = False
 
-    def __init__(self, alpha=0.06):
-        self.alpha = alpha
-        self.x = None
-
-    def update(self, z):
-        if self.x is None:
-            self.x = z.copy()
-            return z.copy()
-        self.x = self.alpha * z + (1.0 - self.alpha) * self.x
-        return self.x.copy()
+    def update(self, z: np.ndarray):
+        if not self.initialized:
+            self.x[:2] = z
+            self.initialized = True
+            return z
+        x_pred = self.F @ self.x
+        P_pred = self.F @ self.P @ self.F.T + self.Q
+        y_innov = z - self.H @ x_pred
+        S = self.H @ P_pred @ self.H.T + self.R
+        K = P_pred @ self.H.T @ np.linalg.inv(S)
+        self.x = x_pred + K @ y_innov
+        self.P = (np.eye(4) - K @ self.H) @ P_pred
+        return self.x[:2].copy()
 
     def set_smoothness(self, factor: float):
-        # 0=灵敏(alpha=0.3) 1=极平滑(alpha=0.02)
-        self.alpha = 0.3 - factor * 0.28
+        noise = 5 + factor * 200
+        self.R = np.eye(2) * noise
 
     def reset(self):
-        self.x = None
+        self.initialized = False
+        self.P = np.eye(4) * 500
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -108,7 +124,7 @@ class GazeEngine(QObject):
         self._frame_h = 1080
         self._eye_roi = None  # 上帧眼角像素坐标，用于人脸裁剪
 
-        self.kf = EMAFilter()
+        self.kf = KalmanFilter()
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
 
