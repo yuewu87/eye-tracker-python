@@ -221,7 +221,7 @@ class CalibrationWindow(QWidget):
                      screen_h=screen.height(),
                      model=model,
                      poly_degree=2,
-                     poly_features_in=10)
+                     poly_features_in=5)
             print(f"[OK] 校准参数已保存: {save_path}")
             print(f"     样本数: {len(self.samples)}, 屏幕: {screen.width()}x{screen.height()}")
 

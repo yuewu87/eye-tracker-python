@@ -1,4 +1,4 @@
-"""视线追踪引擎 — 3D 头部姿态 + 眼部 ROI 放大 + GBR 模型 + Kalman 滤波。"""
+"""视线追踪引擎 — 摄像头、MediaPipe、多项式回归、Kalman 滤波。"""
 
 import math
 import os
@@ -24,52 +24,11 @@ L_EYE_INNER, L_EYE_OUTER = 362, 263
 
 _FaceMesh = mp.solutions.face_mesh.FaceMesh
 
-# solvePnP 6 点参考模型 (mm)，用于 3D 头部姿态估计
-_PNP_LANDMARKS = [1, 152, 33, 263, 61, 291]
-_PNP_3D = np.array([
-    [0.0, 0.0, 0.0],           # 鼻尖
-    [0.0, -63.6, -12.8],        # 下巴
-    [-33.3, 32.5, -30.6],       # 左眼外角
-    [33.3, 32.5, -30.6],        # 右眼外角
-    [-28.1, -27.5, -23.8],      # 左嘴角
-    [28.1, -27.5, -23.8],       # 右嘴角
-], dtype=np.float64)
-
-# 相机内参（近似值，单位：像素）
-_FX = 1920.0
-_FY = 1920.0
-_CAMERA_MATRIX = np.array([[_FX, 0, 960], [0, _FY, 540], [0, 0, 1]], dtype=np.float64)
-_DIST_COEFFS = np.zeros((4, 1), dtype=np.float64)
-
-
-def _compute_head_pose(face_landmarks):
-    """通过 solvePnP 计算 3D 头部旋转角 (yaw, pitch, roll)，单位：弧度。"""
-    lm = face_landmarks.landmark
-    img_pts = np.array([[lm[i].x * 1920, lm[i].y * 1080] for i in _PNP_LANDMARKS], dtype=np.float64)
-    success, rvec, tvec = cv2.solvePnP(_PNP_3D, img_pts, _CAMERA_MATRIX, _DIST_COEFFS,
-                                        flags=cv2.SOLVEPNP_ITERATIVE)
-    if not success:
-        return 0.0, 0.0, 0.0
-    rmat, _ = cv2.Rodrigues(rvec)
-    # 从旋转矩阵提取欧拉角
-    sy = math.sqrt(rmat[0, 0]**2 + rmat[1, 0]**2)
-    singular = sy < 1e-6
-    if not singular:
-        pitch = math.atan2(-rmat[2, 0], sy)
-        yaw   = math.atan2(rmat[1, 0], rmat[0, 0])
-        roll  = math.atan2(rmat[2, 1], rmat[2, 2])
-    else:
-        pitch = math.atan2(-rmat[2, 0], sy)
-        yaw   = math.atan2(-rmat[1, 2], rmat[1, 1])
-        roll  = 0.0
-    return yaw, pitch, roll
-
 
 def extract_features(face_landmarks):
-    """提取 10 维视线特征（眼距归一化 + 3D 头部姿态）。
+    """提取 5 维特征：虹膜偏移 + 眼距。最简单的映射。
 
-    返回 float32[10]:
-      [右虹膜 dx, dy, 左虹膜 dx, dy, 鼻尖 dx, 鼻尖 dy, 对数眼距, yaw, pitch, roll]
+    [右虹膜 dx, dy, 左虹膜 dx, dy, 眼距]
     """
     lm = face_landmarks.landmark
 
@@ -81,34 +40,11 @@ def extract_features(face_landmarks):
     le = np.array([(lm[L_EYE_INNER].x + lm[L_EYE_OUTER].x) / 2,
                     (lm[L_EYE_INNER].y + lm[L_EYE_OUTER].y) / 2])
 
-    face_cx = (re[0] + le[0]) / 2
-    face_cy = (re[1] + le[1]) / 2
     eye_dist = float(np.linalg.norm(re - le))
+    dr = ri - re
+    dl = li - le
 
-    nose = np.array([lm[1].x, lm[1].y])
-    nose_dx = nose[0] - face_cx
-    nose_dy = nose[1] - face_cy
-
-    if eye_dist < 1e-6:
-        eye_dist = 1.0
-
-    dr = (ri - re) / eye_dist
-    dl = (li - le) / eye_dist
-    nose_dx /= eye_dist
-    nose_dy /= eye_dist
-    eye_dist_log = math.log1p(eye_dist * 100)
-
-    yaw, pitch, roll = _compute_head_pose(face_landmarks)
-
-    # IR 模式：低分辨率下特征值太小，放大虹膜偏移
-    scale = _FEATURE_SCALE if eye_dist > 1e-6 else 1.0
-    return np.array([dr[0] * scale, dr[1] * scale,
-                     dl[0] * scale, dl[1] * scale,
-                     nose_dx, nose_dy, eye_dist_log,
-                     yaw, pitch, roll], dtype=np.float32)
-
-
-_FEATURE_SCALE = 1.0   # 默认不缩放，IR 模式设为更大值
+    return np.array([dr[0], dr[1], dl[0], dl[1], eye_dist], dtype=np.float32)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -116,7 +52,7 @@ _FEATURE_SCALE = 1.0   # 默认不缩放，IR 模式设为更大值
 # ═══════════════════════════════════════════════════════════════════
 
 class KalmanFilter:
-    def __init__(self, dt=1/30):
+    def __init__(self, dt=1/25):
         self.dt = dt
         self.x = np.zeros(4)
         self.P = np.eye(4) * 500
@@ -127,7 +63,7 @@ class KalmanFilter:
         self.H = np.array([[1, 0, 0, 0],
                            [0, 1, 0, 0]])
         self.Q = np.diag([0.5, 0.5, 2.0, 2.0])
-        self.R = np.eye(2) * 40   # 响应与平滑平衡
+        self.R = np.eye(2) * 40
         self.initialized = False
 
     def update(self, z: np.ndarray):
@@ -166,11 +102,6 @@ class GazeEngine(QObject):
         self.screen_h = screen_h
         self.use_ir = use_ir
 
-        # IR 模式：不额外缩放，让模型自己学习映射
-        if use_ir:
-            import engine as eng
-            eng._FEATURE_SCALE = 1.0
-
         self.gaze_x = screen_w / 2.0
         self.gaze_y = screen_h / 2.0
         self.prev_x = screen_w / 2.0
@@ -178,13 +109,13 @@ class GazeEngine(QObject):
         self.tracking = False
 
         self.cap = None
-        self.ir_proc = None    # C# IR Bridge 进程
+        self.ir_proc = None
         self.face_mesh = None
 
         self.model = None
         self.x_mean = None
         self.x_std = None
-        self._poly = None    # PolynomialFeatures 转换器
+        self._poly = None
         self.scale_x = 1.0
         self.scale_y = 1.0
         self._has_calib = False
@@ -194,7 +125,7 @@ class GazeEngine(QObject):
 
         self._frame_w = 1920
         self._frame_h = 1080
-        self._eye_roi = None     # (ex1, ey1, ex2, ey2) 上帧眼角像素坐标
+        self._eye_roi = None  # 上帧眼角像素坐标，用于人脸裁剪
 
         self.kf = KalmanFilter()
         self.timer = QTimer()
@@ -229,7 +160,7 @@ class GazeEngine(QObject):
         self.timer.stop()
 
     def resume(self):
-        self.timer.start(40)  # 25 fps
+        self.timer.start(40)
 
     def stop_camera(self):
         self.timer.stop()
@@ -265,15 +196,14 @@ class GazeEngine(QObject):
         self.x_mean = calib["x_mean"]
         self.x_std = calib["x_std"]
         n_feat = len(self.x_mean)
-        if n_feat not in (7, 10):
-            print(f"[!] 校准特征维度 {n_feat} 不兼容，请重新校准")
+        if n_feat != 5:
+            print(f"[!] 校准特征维度 {n_feat} != 5，请重新校准")
             self._has_calib = False
             return
         self.model = calib["model"].item()
         self.scale_x = self.screen_w / float(calib["screen_w"])
         self.scale_y = self.screen_h / float(calib["screen_h"])
 
-        # 重建多项式特征转换器
         if "poly_degree" in calib:
             degree = int(calib["poly_degree"])
             n_in = int(calib["poly_features_in"])
@@ -307,7 +237,7 @@ class GazeEngine(QObject):
         self._frame_w = w
         self._frame_h = h
 
-        # 人脸裁剪归一化：用上帧眼睛位置裁剪当前帧，放大到固定眼距
+        # 人脸裁剪归一化：上帧眼角 → 裁剪当前帧 → 放大到标准眼距
         if self._eye_roi is not None:
             ex1, ey1, ex2, ey2 = self._eye_roi
             cx, cy = (ex1 + ex2) // 2, (ey1 + ey2) // 2
@@ -362,7 +292,6 @@ class GazeEngine(QObject):
             lm = results.multi_face_landmarks[0].landmark
             feats = extract_features(results.multi_face_landmarks[0])
 
-            # 保存眼角像素坐标用于下帧裁剪
             self._eye_roi = (int(lm[R_EYE_OUTER].x * self._frame_w),
                               int(lm[R_EYE_OUTER].y * self._frame_h),
                               int(lm[L_EYE_OUTER].x * self._frame_w),
