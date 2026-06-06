@@ -127,7 +127,7 @@ class KalmanFilter:
         self.H = np.array([[1, 0, 0, 0],
                            [0, 1, 0, 0]])
         self.Q = np.diag([0.5, 0.5, 2.0, 2.0])
-        self.R = np.eye(2) * 80   # 默认更平滑
+        self.R = np.eye(2) * 40   # 响应与平滑平衡
         self.initialized = False
 
     def update(self, z: np.ndarray):
@@ -222,13 +222,13 @@ class GazeEngine(QObject):
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5,
         )
-        self.timer.start(33)
+        self.timer.start(40)  # 25 fps
 
     def pause(self):
         self.timer.stop()
 
     def resume(self):
-        self.timer.start(33)
+        self.timer.start(40)  # 25 fps
 
     def stop_camera(self):
         self.timer.stop()
@@ -336,12 +336,7 @@ class GazeEngine(QObject):
             feats = extract_features(results.multi_face_landmarks[0])
 
             if self._has_calib:
-                # 离群检测：特征距校准均值 > 4 个标准差 → 丢弃
-                z_score = np.abs((feats - self.x_mean) / self.x_std).max()
-                if z_score < 4.0:
-                    px, py = self.predict(feats)
-                else:
-                    px, py = self.gaze_x, self.gaze_y
+                px, py = self.predict(feats)
             else:
                 px = float(np.clip(feats[0] + 0.5, 0, 1)) * self.screen_w
                 py = float(np.clip(feats[2] + 0.5, 0, 1)) * self.screen_h

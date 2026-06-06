@@ -1,7 +1,7 @@
 """简单摄像头预览 — 按 Esc 退出"""
 import sys, cv2
 
-idx = 1
+idx = 0
 cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)

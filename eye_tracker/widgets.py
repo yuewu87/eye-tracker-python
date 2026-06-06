@@ -214,13 +214,13 @@ class MainWindow(QWidget):
         smooth_label.setFixedWidth(40)
         self.smooth_slider = QSlider(Qt.Horizontal)
         self.smooth_slider.setRange(5, 100)
-        self.smooth_slider.setValue(50)
+        self.smooth_slider.setValue(30)
         self.smooth_slider.setStyleSheet("""
             QSlider::groove:horizontal { height: 4px; background: #333; border-radius: 2px; }
             QSlider::handle:horizontal { width: 14px; height: 14px; margin: -5px 0; background: #0af; border-radius: 7px; }
             QSlider::sub-page:horizontal { background: #0af; border-radius: 2px; }
         """)
-        self.smooth_val = QLabel("0.50")
+        self.smooth_val = QLabel("0.30")
         self.smooth_val.setStyleSheet("color: #0af; font-size: 12px;")
         self.smooth_val.setFixedWidth(36)
         self.smooth_slider.valueChanged.connect(lambda v: self.smoothing_changed.emit(v / 100.0))
