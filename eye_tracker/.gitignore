@@ -2,3 +2,4 @@ calibration.npz
 __pycache__/
 .superpowers/
 .txt
+calibration*.npz
