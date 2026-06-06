@@ -45,52 +45,29 @@ def extract_features(face_landmarks):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# 1€ 滤波器 — 注视时强平滑，扫视时快速响应
+# EMA 指数平滑 — 简单但稳定
 # ═══════════════════════════════════════════════════════════════════
 
-class OneEuroFilter:
-    """1€ Filter: 低速时截止频率低（平滑），高速时截止频率高（灵敏）。"""
+class EMAFilter:
+    """指数加权移动平均。alpha 越小越平滑。"""
 
-    def __init__(self, dt=1/25, min_cutoff=0.4, beta=0.005):
-        self.dt = dt
-        self.min_cutoff = min_cutoff
-        self.beta = beta
-        self.x_prev = None
-        self.dx_prev = None
-
-    def _alpha(self, cutoff):
-        tau = 1.0 / (2.0 * math.pi * cutoff)
-        return 1.0 / (1.0 + tau / self.dt)
+    def __init__(self, alpha=0.06):
+        self.alpha = alpha
+        self.x = None
 
     def update(self, z):
-        if self.x_prev is None:
-            self.x_prev = z.copy()
-            self.dx_prev = np.zeros_like(z)
+        if self.x is None:
+            self.x = z.copy()
             return z.copy()
-
-        # 估计导数（速度）
-        dx = (z - self.x_prev) / self.dt
-        dx_alpha = self._alpha(self.min_cutoff)
-        self.dx_prev = dx_alpha * dx + (1.0 - dx_alpha) * self.dx_prev
-
-        # 自适应截止频率：速度越快截止越高
-        speed = float(np.linalg.norm(self.dx_prev))
-        cutoff = self.min_cutoff + self.beta * speed
-
-        # 低通滤波
-        alpha = self._alpha(cutoff)
-        self.x_prev = alpha * z + (1.0 - alpha) * self.x_prev
-
-        return self.x_prev.copy()
+        self.x = self.alpha * z + (1.0 - self.alpha) * self.x
+        return self.x.copy()
 
     def set_smoothness(self, factor: float):
-        # 0=灵敏(freq=2) 1=极平滑(freq=0.1)
-        self.min_cutoff = 2.0 - factor * 1.9
-        self.beta = 0.001 + factor * 0.03
+        # 0=灵敏(alpha=0.3) 1=极平滑(alpha=0.02)
+        self.alpha = 0.3 - factor * 0.28
 
     def reset(self):
-        self.x_prev = None
-        self.dx_prev = None
+        self.x = None
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -131,7 +108,7 @@ class GazeEngine(QObject):
         self._frame_h = 1080
         self._eye_roi = None  # 上帧眼角像素坐标，用于人脸裁剪
 
-        self.kf = OneEuroFilter()
+        self.kf = EMAFilter()
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
 
