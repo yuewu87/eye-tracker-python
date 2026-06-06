@@ -16,7 +16,7 @@ CALIB_POINTS = [
     (0.08, 0.08), (0.92, 0.08), (0.5, 0.5), (0.08, 0.92), (0.92, 0.92),
 ]
 
-SAMPLES_RGB = 80
+SAMPLES_RGB = 120
 SAMPLES_IR  = 30   # IR 帧率低，减半采样
 SETTLE_SECONDS = 0.8
 PREP_SECONDS = 1.0
@@ -144,12 +144,32 @@ class CalibrationWindow(QWidget):
         elif self.phase == "collect":
             self._collect_frame()
             if self.collected >= self.samples_needed:
+                self._filter_samples()
                 self.current_idx += 1
                 self.phase = "prep"
                 self.phase_timer = 0
+                self.collected = 0
                 if self.current_idx >= len(CALIB_POINTS):
                     self._finish()
         self.repaint()
+
+    def _filter_samples(self):
+        """过滤当前校准点的离群样本（z-score > 2.5 的特征剔除）"""
+        if len(self.samples) < 20:
+            return
+        # 只过滤最近采集的这一批
+        start = max(0, len(self.samples) - self.samples_needed)
+        recent = [(f, t) for f, t in self.samples[start:]]
+        feats = np.array([f for f, _ in recent])
+        mean = feats.mean(axis=0)
+        std = feats.std(axis=0) + 1e-6
+        z = np.abs((feats - mean) / std).max(axis=1)
+        keep = z < 2.5
+        n_removed = (~keep).sum()
+        if n_removed > 0:
+            # 替换为保留样本
+            self.samples[start:] = [recent[i] for i in range(len(recent)) if keep[i]]
+            print(f"  [i] 点{self.current_idx+1}: 剔除 {n_removed} 个离群帧")
 
     def _collect_frame(self):
         """从引擎读取一帧，提取特征并与注视点坐标配对存储。"""
