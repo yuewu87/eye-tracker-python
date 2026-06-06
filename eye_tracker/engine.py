@@ -45,45 +45,52 @@ def extract_features(face_landmarks):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Kalman 滤波器
+# 1€ 滤波器 — 注视时强平滑，扫视时快速响应
 # ═══════════════════════════════════════════════════════════════════
 
-class KalmanFilter:
-    def __init__(self, dt=1/25):
-        self.dt = dt
-        self.x = np.zeros(4)
-        self.P = np.eye(4) * 500
-        self.F = np.array([[1, 0, dt, 0],
-                           [0, 1, 0, dt],
-                           [0, 0, 1,  0],
-                           [0, 0, 0,  1]])
-        self.H = np.array([[1, 0, 0, 0],
-                           [0, 1, 0, 0]])
-        self.Q = np.diag([0.5, 0.5, 2.0, 2.0])
-        self.R = np.eye(2) * 40
-        self.initialized = False
+class OneEuroFilter:
+    """1€ Filter: 低速时截止频率低（平滑），高速时截止频率高（灵敏）。"""
 
-    def update(self, z: np.ndarray):
-        if not self.initialized:
-            self.x[:2] = z
-            self.initialized = True
-            return z
-        x_pred = self.F @ self.x
-        P_pred = self.F @ self.P @ self.F.T + self.Q
-        y_innov = z - self.H @ x_pred
-        S = self.H @ P_pred @ self.H.T + self.R
-        K = P_pred @ self.H.T @ np.linalg.inv(S)
-        self.x = x_pred + K @ y_innov
-        self.P = (np.eye(4) - K @ self.H) @ P_pred
-        return self.x[:2].copy()
+    def __init__(self, dt=1/25, min_cutoff=1.0, beta=0.01):
+        self.dt = dt
+        self.min_cutoff = min_cutoff
+        self.beta = beta
+        self.x_prev = None
+        self.dx_prev = None
+
+    def _alpha(self, cutoff):
+        tau = 1.0 / (2.0 * math.pi * cutoff)
+        return 1.0 / (1.0 + tau / self.dt)
+
+    def update(self, z):
+        if self.x_prev is None:
+            self.x_prev = z.copy()
+            self.dx_prev = np.zeros_like(z)
+            return z.copy()
+
+        # 估计导数（速度）
+        dx = (z - self.x_prev) / self.dt
+        dx_alpha = self._alpha(self.min_cutoff)
+        self.dx_prev = dx_alpha * dx + (1.0 - dx_alpha) * self.dx_prev
+
+        # 自适应截止频率：速度越快截止越高
+        speed = float(np.linalg.norm(self.dx_prev))
+        cutoff = self.min_cutoff + self.beta * speed
+
+        # 低通滤波
+        alpha = self._alpha(cutoff)
+        self.x_prev = alpha * z + (1.0 - alpha) * self.x_prev
+
+        return self.x_prev.copy()
 
     def set_smoothness(self, factor: float):
-        noise = 5 + factor * 200
-        self.R = np.eye(2) * noise
+        # 0=灵敏(freq=3) 1=平滑(freq=0.2)
+        self.min_cutoff = 3.0 - factor * 2.8
+        self.beta = 0.001 + factor * 0.05
 
     def reset(self):
-        self.initialized = False
-        self.P = np.eye(4) * 500
+        self.x_prev = None
+        self.dx_prev = None
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -124,7 +131,7 @@ class GazeEngine(QObject):
         self._frame_h = 1080
         self._eye_roi = None  # 上帧眼角像素坐标，用于人脸裁剪
 
-        self.kf = KalmanFilter()
+        self.kf = OneEuroFilter()
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
 
