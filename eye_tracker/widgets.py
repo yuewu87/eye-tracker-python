@@ -175,6 +175,7 @@ class MainWindow(QWidget):
     center_calibrate_clicked = Signal()
     hide_clicked = Signal()
     hide_panel_clicked = Signal()
+    mode_clicked = Signal()           # 切换 RGB/IR 模式
     smoothing_changed = Signal(float)
 
     def __init__(self):
@@ -275,7 +276,7 @@ class MainWindow(QWidget):
         btn_row.addWidget(self.center_cal_btn)
         layout.addLayout(btn_row)
 
-        # 第二行：隐藏面板
+        # 第二行：隐藏面板 + 模式切换
         row2 = QHBoxLayout()
         self.hide_panel_btn = QPushButton("隐藏面板")
         self.hide_panel_btn.setStyleSheet("""
@@ -284,7 +285,17 @@ class MainWindow(QWidget):
             QPushButton:hover { border-color: #888; color: #ccc; }
         """)
         self.hide_panel_btn.clicked.connect(self.hide_panel_clicked)
+
+        self.mode_btn = QPushButton("IR 模式")
+        self.mode_btn.setStyleSheet("""
+            QPushButton { padding: 8px; font-size: 12px; border-radius: 4px;
+            border: 1px solid #a55; background: transparent; color: #a55; }
+            QPushButton:hover { border-color: #f88; color: #f88; }
+        """)
+        self.mode_btn.clicked.connect(self.mode_clicked)
+
         row2.addWidget(self.hide_panel_btn)
+        row2.addWidget(self.mode_btn)
         layout.addLayout(row2)
         self.setLayout(layout)
 

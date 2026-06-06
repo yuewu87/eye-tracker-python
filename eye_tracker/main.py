@@ -21,6 +21,7 @@ class App:
         self.sw = screen.width()
         self.sh = screen.height()
 
+        self.use_ir = use_ir
         self.engine = GazeEngine(self.sw, self.sh, use_ir=use_ir)
         self.main_window = MainWindow()
         self.overlay = None
@@ -42,20 +43,23 @@ class App:
         self.main_window.hide_clicked.connect(self._toggle_overlay)
         self.main_window.smoothing_changed.connect(self.engine.set_smoothing)
         self.main_window.hide_panel_clicked.connect(self._hide_panel)
+        self.main_window.mode_clicked.connect(self._toggle_mode)
 
-        calib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration.npz")
+        self._calib_path = lambda: os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "calibration_ir.npz" if self.use_ir else "calibration.npz")
 
         self.engine.start_camera()
         if not self.engine.is_camera_ok():
             self.main_window.status_label.setText("摄像头不可用")
             self.main_window.start_btn.setEnabled(False)
 
-        if not self.engine.has_calibration(calib_path):
+        if not self.engine.has_calibration(self._calib_path()):
             self.main_window.status_label.setText("需要校准...")
             self._run_calibration()
 
-        if self.engine.has_calibration(calib_path):
-            self.engine.load_calibration(calib_path)
+        if self.engine.has_calibration(self._calib_path()):
+            self.engine.load_calibration(self._calib_path())
         else:
             self.main_window.status_label.setText("校准失败，请重试")
 
@@ -64,6 +68,47 @@ class App:
         self._status_timer.start(50)
 
         self.main_window.show()
+        self._update_mode_button()
+
+    # ── 模式切换 ──────────────────────────────────────────────────
+
+    def _toggle_mode(self):
+        was_tracking = self.tracking_active
+        if was_tracking:
+            self._stop_tracking()
+        self.engine.gaze_updated.disconnect()
+        self.engine.stop_camera()
+        self.use_ir = not self.use_ir
+        print(f"[i] 切换到 {'IR' if self.use_ir else 'RGB'} 模式")
+        self.engine = GazeEngine(self.sw, self.sh, use_ir=self.use_ir)
+        self.engine.start_camera()
+        self.main_window.smoothing_changed.connect(self.engine.set_smoothing)
+        if self.engine.has_calibration(self._calib_path()):
+            self.engine.load_calibration(self._calib_path())
+        else:
+            self.main_window.status_label.setText("需要校准...")
+            self._run_calibration()
+            if self.engine.has_calibration(self._calib_path()):
+                self.engine.load_calibration(self._calib_path())
+        self._update_mode_button()
+        if was_tracking:
+            self._start_tracking()
+
+    def _update_mode_button(self):
+        if self.use_ir:
+            self.main_window.mode_btn.setText("IR 模式")
+            self.main_window.mode_btn.setStyleSheet("""
+                QPushButton { padding: 8px; font-size: 12px; border-radius: 4px;
+                border: 1px solid #a55; background: transparent; color: #a55; }
+                QPushButton:hover { border-color: #f88; color: #f88; }
+            """)
+        else:
+            self.main_window.mode_btn.setText("RGB 模式")
+            self.main_window.mode_btn.setStyleSheet("""
+                QPushButton { padding: 8px; font-size: 12px; border-radius: 4px;
+                border: 1px solid #5af; background: transparent; color: #5af; }
+                QPushButton:hover { border-color: #8cf; color: #8cf; }
+            """)
 
     # ── 系统托盘 ──────────────────────────────────────────────────
 
@@ -147,9 +192,8 @@ class App:
         self.main_window.hide()
         run_calibration(self.engine)
         self.engine.resume()
-        calib_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration.npz")
-        if self.engine.has_calibration(calib_path):
-            self.engine.load_calibration(calib_path)
+        if self.engine.has_calibration(self._calib_path()):
+            self.engine.load_calibration(self._calib_path())
         self.main_window.show()
         if was_tracking:
             self._start_tracking()
