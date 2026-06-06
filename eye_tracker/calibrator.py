@@ -1,4 +1,4 @@
-"""视线校准模块 — 全屏 9 点校准流程，使用引擎共享的摄像头和特征提取。"""
+"""视线校准模块 — 全屏 7 点校准流程，使用引擎共享的摄像头和特征提取。"""
 
 import os
 import sys
@@ -11,11 +11,11 @@ from PySide6.QtGui import QPainter, QColor, QFont, QPen
 
 from engine import extract_features
 
-# 9 点 3×3 网格校准
+# 7 点校准：覆盖全屏 + 上行加强（补偿摄像头在下巴位置的向上视角盲区）
 CALIB_POINTS = [
-    (0.08, 0.08), (0.50, 0.08), (0.92, 0.08),
-    (0.08, 0.50), (0.50, 0.50), (0.92, 0.50),
-    (0.08, 0.92), (0.50, 0.92), (0.92, 0.92),
+    (0.08, 0.05), (0.50, 0.05), (0.92, 0.05),   # 上行：顶部
+    (0.08, 0.92), (0.92, 0.92),                   # 下行：底部
+    (0.50, 0.50), (0.50, 0.92),                   # 中心 + 下中
 ]
 
 SAMPLES_RGB = 120
@@ -25,7 +25,7 @@ PREP_SECONDS = 1.0
 
 
 class CalibrationWindow(QWidget):
-    """全屏校准窗口：依次显示 9 个注视点，采集虹膜特征训练 Ridge 回归。"""
+    """全屏校准窗口：依次显示 7 个注视点，采集虹膜特征训练 Ridge 回归。"""
 
     calibration_done = Signal()
 
@@ -208,7 +208,7 @@ class CalibrationWindow(QWidget):
             n_feat = X_poly.shape[1]
             model = RidgeCV(alphas=[0.01, 0.1, 0.5, 1.0, 5.0, 10.0, 50.0])
             model.fit(X_poly, y)
-            print(f"[i] Poly(deg=2): 10→{n_feat} 维, best α={model.alpha_}")
+            print(f"[i] Poly(deg=2): 5→{n_feat} 维, best α={model.alpha_}")
 
             screen = QApplication.primaryScreen().geometry()
             # IR 模式使用独立的校准文件
