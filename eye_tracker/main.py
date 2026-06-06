@@ -13,15 +13,15 @@ from widgets import MainWindow, OverlayWindow, CaptureWindow
 
 
 class App:
-    def __init__(self):
+    def __init__(self, use_ir=False):
         self.app = QApplication(sys.argv)
-        self.app.setQuitOnLastWindowClosed(False)  # 关闭窗口不退出
+        self.app.setQuitOnLastWindowClosed(False)
 
         screen = self.app.primaryScreen().geometry()
         self.sw = screen.width()
         self.sh = screen.height()
 
-        self.engine = GazeEngine(self.sw, self.sh)
+        self.engine = GazeEngine(self.sw, self.sh, use_ir=use_ir)
         self.main_window = MainWindow()
         self.overlay = None
         self.capture = None
@@ -187,4 +187,5 @@ class App:
 
 
 if __name__ == "__main__":
-    App().run()
+    use_ir = "--ir" in sys.argv
+    App(use_ir=use_ir).run()
