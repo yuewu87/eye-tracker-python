@@ -26,9 +26,9 @@ _FaceMesh = mp.solutions.face_mesh.FaceMesh
 
 
 def extract_features(face_landmarks):
-    """5 维特征：眼距归一化虹膜偏移。头距不变。
+    """5 维特征：虹膜偏移 + 对数眼距。裁剪已固定眼距 ≈200px，无需再除。
 
-    [右 dx/ed, dy/ed, 左 dx/ed, dy/ed, log1p(ed*100)]
+    [右 dx, dy, 左 dx, dy, log1p(ed*100)]
     """
     lm = face_landmarks.landmark
     ri = np.mean([[lm[i].x, lm[i].y] for i in RIGHT_IRIS], axis=0)
@@ -38,10 +38,8 @@ def extract_features(face_landmarks):
     le = np.array([(lm[L_EYE_INNER].x + lm[L_EYE_OUTER].x) / 2,
                     (lm[L_EYE_INNER].y + lm[L_EYE_OUTER].y) / 2])
     eye_dist = float(np.linalg.norm(re - le))
-    if eye_dist < 1e-6:
-        eye_dist = 1.0
-    dr = (ri - re) / eye_dist
-    dl = (li - le) / eye_dist
+    dr = ri - re
+    dl = li - le
     return np.array([dr[0], dr[1], dl[0], dl[1],
                      math.log1p(eye_dist * 100)], dtype=np.float32)
 
@@ -235,6 +233,17 @@ class GazeEngine(QObject):
         h, w = frame.shape[:2]
         self._frame_w = w
         self._frame_h = h
+
+        # 首帧：全图检测拿到眼角位置
+        if self._eye_roi is None:
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            rgb.flags.writeable = False
+            results = self.face_mesh.process(rgb)
+            if results and results.multi_face_landmarks:
+                lm = results.multi_face_landmarks[0].landmark
+                self._eye_roi = (int(lm[R_EYE_OUTER].x * w), int(lm[R_EYE_OUTER].y * h),
+                                  int(lm[L_EYE_OUTER].x * w), int(lm[L_EYE_OUTER].y * h))
+                results = None  # 丢弃全图结果，用裁剪重读
 
         # 人脸裁剪归一化：上帧眼角 → 裁剪当前帧 → 放大到标准眼距
         if self._eye_roi is not None:
