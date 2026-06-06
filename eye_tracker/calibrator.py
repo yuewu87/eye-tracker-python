@@ -189,7 +189,9 @@ class CalibrationWindow(QWidget):
             print(f"[i] GBR 训练完成")
 
             screen = QApplication.primaryScreen().geometry()
-            save_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "calibration.npz")
+            # IR 模式使用独立的校准文件
+            fname = "calibration_ir.npz" if self.engine.use_ir else "calibration.npz"
+            save_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), fname)
             np.savez(save_path,
                      x_mean=self.x_mean.astype(np.float64),
                      x_std=self.x_std.astype(np.float64),
@@ -198,6 +200,23 @@ class CalibrationWindow(QWidget):
                      model=model)
             print(f"[OK] 校准参数已保存: {save_path}")
             print(f"     样本数: {len(self.samples)}, 屏幕: {screen.width()}x{screen.height()}")
+
+            # 校准质量评估
+            X_all = np.array([s[0] for s in self.samples], dtype=np.float64)
+            y_all = np.array([s[1] for s in self.samples], dtype=np.float64)
+            Xn = (X_all - self.x_mean) / self.x_std
+            y_pred = model.predict(Xn)
+            errors = np.sqrt(((y_pred - y_all) ** 2).sum(axis=1))
+            print(f"[i] 校准误差: 平均={errors.mean():.1f}px 最大={errors.max():.1f}px")
+
+            # 每点误差
+            per_point = SAMPLES_IR if self.engine.use_ir else SAMPLES_RGB
+            for i, (px, py) in enumerate(CALIB_POINTS):
+                start = i * per_point
+                end = start + per_point
+                if start < len(errors):
+                    e = errors[start:end].mean()
+                    print(f"     点{i+1} ({px:.0%},{py:.0%}): 平均误差 {e:.0f}px")
 
         self.close()
         self.calibration_done.emit()
