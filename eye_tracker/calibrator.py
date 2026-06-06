@@ -79,24 +79,40 @@ class CalibrationWindow(QWidget):
             cx = int(px * w)
             cy = int(py * h)
 
+            # 十字准星 + 呼吸动画
             if self.phase == "prep":
-                radius = 30 + 8 * np.sin(self.phase_timer * 3)
-                color = QColor(200, 160, 255, 120)
+                pulse = 0.5 + 0.5 * np.sin(self.phase_timer * 4)
+                length = 30.0 + 15.0 * pulse
+                gap = 6.0 + 4.0 * pulse
+                alpha = 80 + int(80 * pulse)
+                color = QColor(200, 160, 255, alpha)
             elif self.phase == "settle":
-                radius = 36
-                color = QColor(180, 140, 240, 160)
+                length, gap = 45.0, 8.0
+                color = QColor(180, 140, 240, 200)
             else:
-                radius = 28
-                color = QColor(160, 180, 255, 200)
+                length, gap = 36.0, 6.0
+                color = QColor(120, 200, 255, 220)
                 bar_w, bar_h = 300, 6
                 bx = (w - bar_w) // 2
                 by_ = h - 50
                 p.fillRect(bx, by_, bar_w, bar_h, QColor(60, 60, 60))
                 p.fillRect(bx, by_, int(bar_w * self.collected / self.samples_needed), bar_h, QColor(0, 200, 255))
 
-            p.setBrush(color)
+            pen = QPen(color, 3)
+            pen.setCapStyle(Qt.RoundCap)
+            p.setPen(pen)
+            # 上
+            p.drawLine(cx, int(cy - gap), cx, int(cy - length))
+            # 下
+            p.drawLine(cx, int(cy + gap), cx, int(cy + length))
+            # 左
+            p.drawLine(int(cx - gap), cy, int(cx - length), cy)
+            # 右
+            p.drawLine(int(cx + gap), cy, int(cx + length), cy)
+            # 中心微点
             p.setPen(Qt.NoPen)
-            p.drawEllipse(QPoint(cx, cy), radius, radius)
+            p.setBrush(QColor(255, 255, 255, 200))
+            p.drawEllipse(QPoint(cx, cy), 2, 2)
 
             if self.phase == "prep":
                 sec = max(1, int(np.ceil(PREP_SECONDS - self.phase_timer)))
