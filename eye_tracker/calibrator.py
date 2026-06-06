@@ -88,12 +88,12 @@ class CalibrationWindow(QWidget):
                 alpha = 80 + int(80 * pulse)
                 color = QColor(200, 160, 255, alpha)
             elif self.phase == "settle":
-                pulse = 0.5 + 0.5 * np.sin(t * 2)
+                pulse = 0.5 + 0.5 * np.sin(t * 3)
                 length = 42.0 + 6.0 * pulse
                 gap = 7.0 + 2.0 * pulse
                 color = QColor(180, 140, 240, 180 + int(40 * pulse))
             else:
-                pulse = 0.5 + 0.5 * np.sin(t * 1.5)
+                pulse = 0.5 + 0.5 * np.sin(t * 3)
                 length = 34.0 + 5.0 * pulse
                 gap = 6.0 + 1.5 * pulse
                 color = QColor(100, 200, 255, 180 + int(50 * pulse))
