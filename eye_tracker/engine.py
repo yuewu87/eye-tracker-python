@@ -26,7 +26,7 @@ _FaceMesh = mp.solutions.face_mesh.FaceMesh
 
 
 def extract_features(face_landmarks):
-    """5 维特征：眼距归一化虹膜偏移 + 对数眼距。头距不变。
+    """5 维特征：眼距归一化虹膜偏移。头距不变。
 
     [右 dx/ed, dy/ed, 左 dx/ed, dy/ed, log1p(ed*100)]
     """
@@ -124,6 +124,8 @@ class GazeEngine(QObject):
 
         self._frame_w = 1920
         self._frame_h = 1080
+        self._eye_roi = None  # 上帧眼角像素坐标，用于人脸裁剪
+
         self.kf = KalmanFilter()
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
@@ -233,6 +235,32 @@ class GazeEngine(QObject):
         h, w = frame.shape[:2]
         self._frame_w = w
         self._frame_h = h
+
+        # 人脸裁剪归一化：上帧眼角 → 裁剪当前帧 → 放大到标准眼距
+        if self._eye_roi is not None:
+            ex1, ey1, ex2, ey2 = self._eye_roi
+            cx, cy = (ex1 + ex2) // 2, (ey1 + ey2) // 2
+            size = max(abs(ex2 - ex1) * 3, abs(ey2 - ey1) * 3, 120)
+            x1 = max(0, cx - size)
+            y1 = max(0, cy - size)
+            x2 = min(w, cx + size)
+            y2 = min(h, cy + size)
+            if x2 > x1 and y2 > y1:
+                crop = frame[y1:y2, x1:x2]
+                crop_eye_dist = np.linalg.norm([ex2 - ex1, ey2 - ey1])
+                scale = 200.0 / max(crop_eye_dist, 1.0)
+                crop = cv2.resize(crop, None, fx=scale, fy=scale)
+                # 保存裁剪参数供 _tick 中 eye_roi 反算
+                self._cr_w, self._cr_h = crop.shape[1], crop.shape[0]
+                self._cr_scale = scale
+                self._cr_x1, self._cr_y1 = x1, y1
+                rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+                rgb.flags.writeable = False
+                results = self.face_mesh.process(rgb)
+                # 不再映射回原图 —— landmarks 保持在归一化人脸坐标中
+                # 特征提取时眼距始终 ≈200px，头距不变
+                return frame, results
+
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         rgb.flags.writeable = False
         results = self.face_mesh.process(rgb)
@@ -262,6 +290,20 @@ class GazeEngine(QObject):
         if results.multi_face_landmarks:
             lm = results.multi_face_landmarks[0].landmark
             feats = extract_features(results.multi_face_landmarks[0])
+
+            # 眼角坐标：从裁剪空间映射回原图
+            if self._eye_roi is not None:
+                s = self._cr_scale
+                r_ox = (lm[R_EYE_OUTER].x * self._cr_w / s + self._cr_x1)
+                r_oy = (lm[R_EYE_OUTER].y * self._cr_h / s + self._cr_y1)
+                l_ox = (lm[L_EYE_OUTER].x * self._cr_w / s + self._cr_x1)
+                l_oy = (lm[L_EYE_OUTER].y * self._cr_h / s + self._cr_y1)
+                self._eye_roi = (int(r_ox), int(r_oy), int(l_ox), int(l_oy))
+            else:
+                self._eye_roi = (int(lm[R_EYE_OUTER].x * self._frame_w),
+                                  int(lm[R_EYE_OUTER].y * self._frame_h),
+                                  int(lm[L_EYE_OUTER].x * self._frame_w),
+                                  int(lm[L_EYE_OUTER].y * self._frame_h))
 
             if self._has_calib:
                 px, py = self.predict(feats)
