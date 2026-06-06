@@ -280,8 +280,9 @@ class CenterCalibWindow(QWidget):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setGeometry(screen)
         self.samples = []
-        self.timer_count = int(2.5 * 30)  # 2.5 秒 @ 30fps
+        self.timer_count = int(2.5 * 30)
         self.frame = 0
+        self._finished = False
 
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
@@ -331,6 +332,8 @@ class CenterCalibWindow(QWidget):
             self.calibration_done.emit()
 
     def _tick(self):
+        if self._finished:
+            return
         self.frame += 1
         _, results = self.engine.read_camera()
         if results and results.multi_face_landmarks:
@@ -342,7 +345,7 @@ class CenterCalibWindow(QWidget):
 
     def _finish(self):
         self.timer.stop()
-        self.frame = self.timer_count + 1  # 防止 _tick 再次触发 _finish
+        self._finished = True
         if len(self.samples) < 10:
             self.close()
             self.calibration_done.emit()
