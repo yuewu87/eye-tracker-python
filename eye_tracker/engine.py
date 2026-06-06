@@ -153,10 +153,11 @@ class KalmanFilter:
 class GazeEngine(QObject):
     gaze_updated = Signal(float, float, float, float, bool)
 
-    def __init__(self, screen_w: int, screen_h: int):
+    def __init__(self, screen_w: int, screen_h: int, use_ir=False):
         super().__init__()
         self.screen_w = screen_w
         self.screen_h = screen_h
+        self.use_ir = use_ir
 
         self.gaze_x = screen_w / 2.0
         self.gaze_y = screen_h / 2.0
@@ -165,6 +166,7 @@ class GazeEngine(QObject):
         self.tracking = False
 
         self.cap = None
+        self.ir_proc = None    # C# IR Bridge 进程
         self.face_mesh = None
 
         self.model = None
@@ -184,12 +186,20 @@ class GazeEngine(QObject):
     # ── 摄像头 ──────────────────────────────────────────────────
 
     def start_camera(self):
-        self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-        if not self.cap.isOpened():
-            print("[!] 无法打开摄像头")
-            return
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+        if self.use_ir:
+            from ir_source import IRSource, start_ir_bridge
+            print("[i] 启动 IR Bridge...")
+            self.ir_proc = start_ir_bridge()
+            self.cap = IRSource()
+            print(f"[i] IR 摄像头: {self.cap.width}x{self.cap.height}")
+        else:
+            self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+            if not self.cap.isOpened():
+                print("[!] 无法打开摄像头")
+                return
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+
         self.face_mesh = _FaceMesh(
             static_image_mode=False, max_num_faces=1,
             refine_landmarks=True,
@@ -207,15 +217,25 @@ class GazeEngine(QObject):
     def stop_camera(self):
         self.timer.stop()
         if self.cap is not None:
-            if self.cap.isOpened():
+            if not self.use_ir:
+                if self.cap.isOpened():
+                    self.cap.release()
+            else:
                 self.cap.release()
             self.cap = None
+        if self.ir_proc is not None:
+            self.ir_proc.terminate()
+            self.ir_proc = None
         if self.face_mesh is not None:
             self.face_mesh.close()
             self.face_mesh = None
 
     def is_camera_ok(self) -> bool:
-        return self.cap is not None and self.cap.isOpened()
+        if self.cap is None:
+            return False
+        if self.use_ir:
+            return self.cap.is_opened()
+        return self.cap.isOpened()
 
     # ── 校准 ────────────────────────────────────────────────────
 
