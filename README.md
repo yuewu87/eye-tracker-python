@@ -4,16 +4,18 @@
 
 ---
 
-桌面视线追踪光圈 — 用普通摄像头实现眼动仪效果。MediaPipe 虹膜检测 + GBR 机器学习模型 + Kalman 滤波，实时显示视线位置。
+桌面视线追踪光圈 — 用普通摄像头实现眼动仪效果。MediaPipe 虹膜检测 + 多项式回归 + Kalman 滤波。
 
 **适用场景：** 游戏直播、OBS 录制、演示标注
 
 ## 效果
 
-- 空心白环 + 紫色外发光跟随视线移动
-- 快速扫视时显示彗星拖尾
-- 控制面板可隐藏 Overlay（玩家看不到但 OBS 能录制）
-- 5 点校准 + 中心单点快速修正
+- 白色空心圆环 + 紫色外发光跟随视线
+- 快速移动时彗星拖尾（速度 > 15px/frame）
+- 控制面板可切换 Overlay 显隐（自己看不看，OBS 独立录制）
+- 7 点校准 + 中心单点漂移修正
+- RGB / IR 双模式切换（IR 需 Windows Hello 摄像头，实验性）
+- 系统托盘后台运行
 
 ## 环境
 
@@ -59,10 +61,11 @@ python eye_tracker/main.py
 | 组件 | 说明 |
 |------|------|
 | 虹膜检测 | MediaPipe Face Mesh + 虹膜关键点 (468-477) |
-| 特征提取 | 虹膜偏移 + 3D 头部姿态 (solvePnP)，眼距归一化 |
-| 预测模型 | GradientBoostingRegressor（非线性回归） |
+| 特征提取 | 5 维：虹膜偏移 + 眼距（最简映射） |
+| 人脸归一化 | 上帧眼角裁剪当前帧 → 缩放到固定眼距，头部移动不变 |
+| 预测模型 | PolynomialFeatures(deg=2) + RidgeCV（平滑连续曲面） |
 | 平滑 | 4 状态 Kalman 滤波（位置+速度） |
-| 光圈渲染 | PySide6 透明全屏 Overlay + QMainWindow 捕获窗口 |
+| 光圈渲染 | PySide6 透明全屏 Overlay + QMainWindow 黑底捕获窗口 |
 
 ## 文件
 
@@ -70,7 +73,11 @@ python eye_tracker/main.py
 eye_tracker/
 ├── main.py           # 入口 + 控制器
 ├── engine.py         # 追踪引擎（摄像头、特征、模型、Kalman）
-├── calibrator.py     # 5 点校准 + 中心校准
+├── calibrator.py     # 7 点校准 + 中心校准
 ├── widgets.py        # 界面窗口 + 光圈渲染
+├── ir_source.py      # IR 摄像头 TCP 源
 └── environment.yml   # conda 环境
+ir_bridge/
+├── Program.cs        # C# IR 桥接（Windows.Media.Capture API）
+└── ir_bridge.csproj
 ```
