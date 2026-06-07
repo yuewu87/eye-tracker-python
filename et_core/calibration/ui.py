@@ -1,20 +1,14 @@
-"""校准 UI — 可选子模块，依赖 PySide6。"""
+"""校准 UI — 可选子模块，依赖 PyQt5。"""
 
 import os
 import numpy as np
-from sklearn.preprocessing import PolynomialFeatures
-from PySide6.QtWidgets import QApplication, QWidget
-from PySide6.QtCore import Qt, QTimer, QPoint, Signal, QEventLoop
-from PySide6.QtGui import QPainter, QColor, QFont, QPen
+from PyQt5.QtWidgets import QApplication, QWidget
+from PyQt5.QtCore import Qt, QTimer, QPoint, QEventLoop, pyqtSignal
+from PyQt5.QtGui import QPainter, QColor, QFont, QPen
 
-from et_core.engine import (
-    extract_features, RIGHT_IRIS, LEFT_IRIS,
-    R_EYE_OUTER, R_EYE_INNER, L_EYE_INNER, L_EYE_OUTER,
-)
 from et_core.calibration.collector import CalibrationCollector
 from et_core.calibration.trainer import train, save, evaluate
 
-# 7 点校准：覆盖全屏
 CALIB_POINTS = [
     (0.08, 0.08), (0.50, 0.08), (0.92, 0.08),
     (0.08, 0.92), (0.92, 0.92),
@@ -33,7 +27,7 @@ PREP_SECONDS = 1.0
 class CalibrationWindow(QWidget):
     """全屏 7 点校准窗口，阻塞执行。"""
 
-    calibration_done = Signal()
+    calibration_done = pyqtSignal()
 
     def __init__(self, camera_processor, use_ir=False):
         super().__init__()
@@ -207,7 +201,7 @@ class CalibrationWindow(QWidget):
 class CenterCalibWindow(QWidget):
     """单点中心校准：注视屏幕中央 2.5 秒。"""
 
-    calibration_done = Signal()
+    calibration_done = pyqtSignal()
 
     def __init__(self, camera_processor, predictor):
         super().__init__()
@@ -296,26 +290,21 @@ class CenterCalibWindow(QWidget):
 
 
 class MonitorCalibWindow(QWidget):
-    """多显示器校准：依次注视每屏中心。"""
+    """多显示器校准：依次在每块屏幕上显示准星。"""
 
-    calibration_done = Signal()
+    calibration_done = pyqtSignal()
 
     def __init__(self, camera_processor, monitors: list):
-        """
-        monitors: [(x, y, w, h), ...] 每块屏幕的几何
-        """
         super().__init__()
         self.camera = camera_processor
         self.monitors = monitors
         print(f"[i] 显示器校准 — {len(monitors)} 块屏幕")
 
-        screen = QApplication.primaryScreen().geometry()
         self.setCursor(Qt.BlankCursor)
         self.setStyleSheet("background: #1a1a1a;")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-        self.setGeometry(screen)
 
-        self.current_idx = 0
+        self.current_idx = -1
         self.phase = "prep"
         self.phase_timer = 0.0
         self.collector = CalibrationCollector(samples_needed=60, settle_seconds=0.5)
@@ -324,6 +313,20 @@ class MonitorCalibWindow(QWidget):
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
         self.timer.setInterval(33)
+        self._advance()
+
+    def _advance(self):
+        """切换到下一块屏幕，窗口移到对应显示器。"""
+        if self.current_idx >= 0 and self.current_idx < len(self.monitors):
+            self.collector.get_samples()  # 清空
+        self.current_idx += 1
+        if self.current_idx >= len(self.monitors):
+            self._finish()
+            return
+        mx, my, mw, mh = self.monitors[self.current_idx]
+        self.setGeometry(mx, my, mw, mh)
+        self.phase = "prep"
+        self.phase_timer = 0.0
         self.showFullScreen()
         self.timer.start()
 
@@ -340,9 +343,7 @@ class MonitorCalibWindow(QWidget):
             p.end()
             return
 
-        mx, my, mw, mh = self.monitors[self.current_idx]
-        cx = int(mx + mw // 2)
-        cy = int(my + mh // 2)
+        cx, cy = w // 2, h // 2
 
         t = self.phase_timer
         pulse = 0.5 + 0.5 * np.sin(t * (3 if self.phase == "collect" else 4))
@@ -401,15 +402,15 @@ class MonitorCalibWindow(QWidget):
                 avg_offset = float(np.mean(offsets))
                 self._offsets.append(avg_offset)
                 print(f"  [i] 屏幕 {self.current_idx + 1}: 偏移={avg_offset:.4f}")
-                self.current_idx += 1
-                self.phase = "prep"
-                self.phase_timer = 0
-                if self.current_idx >= len(self.monitors):
-                    self._finish()
+                self.timer.stop()
+                self.hide()
+                self._advance()
+                return
         self.repaint()
 
     def _finish(self):
         self.timer.stop()
+        self.close()
         self.calibration_done.emit()
 
     def get_offsets(self) -> list[float]:

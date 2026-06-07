@@ -31,3 +31,6 @@ docs/
 # Python cache
 __pycache__/
 *.pyc
+
+# Calibration data
+*.npz

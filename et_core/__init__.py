@@ -192,7 +192,7 @@ class EyeTracker:
 
     @staticmethod
     def _ensure_qt_app():
-        from PySide6.QtWidgets import QApplication
+        from PyQt5.QtWidgets import QApplication
         if QApplication.instance() is None:
             return QApplication([""])
 
@@ -200,7 +200,7 @@ class EyeTracker:
         """阻塞运行 7 点校准。需要 PySide6。"""
         self._ensure_qt_app()
         from et_core.calibration.ui import CalibrationWindow
-        from PySide6.QtCore import QEventLoop
+        from PyQt5.QtCore import QEventLoop
 
         window = CalibrationWindow(self._camera)
         loop = QEventLoop()
@@ -212,7 +212,7 @@ class EyeTracker:
         """阻塞运行中心校准。需要 PySide6。"""
         self._ensure_qt_app()
         from et_core.calibration.ui import CenterCalibWindow
-        from PySide6.QtCore import QEventLoop
+        from PyQt5.QtCore import QEventLoop
 
         window = CenterCalibWindow(self._camera, self._predictor)
         loop = QEventLoop()
@@ -223,7 +223,7 @@ class EyeTracker:
         """阻塞运行多显示器校准。需要 PySide6。"""
         self._ensure_qt_app()
         from et_core.calibration.ui import MonitorCalibWindow
-        from PySide6.QtCore import QEventLoop
+        from PyQt5.QtCore import QEventLoop
 
         window = MonitorCalibWindow(self._camera, self._monitors)
         loop = QEventLoop()
