@@ -289,45 +289,29 @@ class CenterCalibWindow(QWidget):
         self.calibration_done.emit()
 
 
-class MonitorCalibWindow(QWidget):
-    """多显示器校准：依次在每块屏幕上显示准星。"""
+class _MonitorScreen(QWidget):
+    """单块屏幕的校准子窗口。"""
 
-    calibration_done = Signal()
+    done = Signal(float)
 
-    def __init__(self, camera_processor, monitors: list):
+    def __init__(self, camera_processor, monitor_geo, screen_label):
         super().__init__()
         self.camera = camera_processor
-        self.monitors = monitors
-        print(f"[i] 显示器校准 — {len(monitors)} 块屏幕")
-
         self.setCursor(Qt.BlankCursor)
         self.setStyleSheet("background: #1a1a1a;")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        mx, my, mw, mh = monitor_geo
+        self.setGeometry(mx, my, mw, mh)
 
-        self.current_idx = -1
+        self._label = screen_label
         self.phase = "prep"
         self.phase_timer = 0.0
         self.collector = CalibrationCollector(samples_needed=60, settle_seconds=0.5)
-        self._offsets = []
 
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
         self.timer.setInterval(33)
-        self._advance()
-
-    def _advance(self):
-        if self.current_idx >= 0 and self.current_idx < len(self.monitors):
-            self.collector.get_samples()
-        self.current_idx += 1
-        if self.current_idx >= len(self.monitors):
-            self._finish()
-            return
-        mx, my, mw, mh = self.monitors[self.current_idx]
-        self.setGeometry(mx, my, mw, mh)
-        self.phase = "prep"
-        self.phase_timer = 0.0
-        self.show()
-        self.raise_()
+        self.showFullScreen()
         self.timer.start()
 
     def paintEvent(self, event):
@@ -335,14 +319,6 @@ class MonitorCalibWindow(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
         p.fillRect(self.rect(), QColor(26, 26, 26))
-
-        if self.current_idx >= len(self.monitors):
-            p.setPen(QColor(255, 255, 255))
-            p.setFont(QFont("Arial", 28, QFont.Bold))
-            p.drawText(self.rect(), Qt.AlignCenter, "显示器校准完成！")
-            p.end()
-            return
-
         cx, cy = w // 2, h // 2
 
         t = self.phase_timer
@@ -366,24 +342,21 @@ class MonitorCalibWindow(QWidget):
             sec = max(1, int(np.ceil(PREP_SECONDS - self.phase_timer)))
             p.setPen(QColor(255, 255, 255, 100))
             p.setFont(QFont("Arial", 36))
-            p.drawText(self.rect(), Qt.AlignCenter, f"屏幕 {self.current_idx + 1}\n{sec}")
+            p.drawText(self.rect(), Qt.AlignCenter, f"{self._label}\n{sec}")
 
         p.setPen(QColor(120, 120, 120))
         p.setFont(QFont("Arial", 13))
         labels = {"prep": "准备注视", "collect": "采集中..."}
-        p.drawText(20, 30, f"[{self.current_idx + 1}/{len(self.monitors)}]  {labels[self.phase]}")
+        p.drawText(20, 30, f"{self._label}  {labels[self.phase]}")
         p.end()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             self.timer.stop()
             self.close()
-            self.calibration_done.emit()
 
     def _tick(self):
         dt = 0.033
-        if self.current_idx >= len(self.monitors):
-            return
         self.phase_timer += dt
 
         if self.phase == "prep" and self.phase_timer >= PREP_SECONDS:
@@ -397,21 +370,44 @@ class MonitorCalibWindow(QWidget):
                 self.collector.feed_frame(feats)
 
             if self.collector.is_done:
+                self.timer.stop()
                 samples = self.collector.get_samples()
                 offsets = [(s[0][0] + s[0][2]) / 2 for s in samples]
                 avg_offset = float(np.mean(offsets))
-                self._offsets.append(avg_offset)
-                print(f"  [i] 屏幕 {self.current_idx + 1}: 偏移={avg_offset:.4f}")
-                self.timer.stop()
-                self.hide()
-                self._advance()
+                self.done.emit(avg_offset)
+                self.close()
                 return
         self.repaint()
 
-    def _finish(self):
-        self.timer.stop()
-        self.close()
-        self.calibration_done.emit()
+
+class MonitorCalibWindow(QWidget):
+    """多显示器校准控制器：每屏创建独立窗口。"""
+
+    calibration_done = Signal()
+
+    def __init__(self, camera_processor, monitors: list):
+        super().__init__()
+        self.camera = camera_processor
+        self.monitors = monitors
+        self._offsets = []
+        self._idx = 0
+        print(f"[i] 显示器校准 — {len(monitors)} 块屏幕")
+        self.setVisible(False)
+        self._start_next()
+
+    def _start_next(self):
+        if self._idx >= len(self.monitors):
+            self.calibration_done.emit()
+            return
+        label = f"屏幕 {self._idx + 1}/{len(self.monitors)}"
+        self._screen = _MonitorScreen(self.camera, self.monitors[self._idx], label)
+        self._screen.done.connect(self._on_done)
+
+    def _on_done(self, offset):
+        self._offsets.append(offset)
+        print(f"  [i] 屏幕 {self._idx + 1}: 偏移={offset:.4f}")
+        self._idx += 1
+        self._start_next()
 
     def get_offsets(self) -> list[float]:
         return self._offsets

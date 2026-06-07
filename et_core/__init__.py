@@ -42,13 +42,11 @@ class EyeTracker:
 
         # 多显示器几何
         if monitors is None:
-            self._monitors = []
-            monitor_idx = 0
+            raw = []
 
             def _enum_callback(hMonitor, hdc, rect, param):
                 r = rect.contents
-                self._monitors.append((r[0], r[1],
-                                       r[2] - r[0], r[3] - r[1]))
+                raw.append((r[0], r[1], r[2] - r[0], r[3] - r[1]))
                 return True
 
             MonitorEnumProc = ctypes.WINFUNCTYPE(
@@ -58,6 +56,10 @@ class EyeTracker:
             ctypes.windll.user32.EnumDisplayMonitors(
                 None, None, MonitorEnumProc(_enum_callback), 0
             )
+            # 主屏排在第一，其余按 x 坐标排序
+            primary = next((m for m in raw if m[0] == 0 and m[1] == 0), raw[0])
+            others = sorted([m for m in raw if m != primary], key=lambda m: m[0])
+            self._monitors = [primary] + others
         else:
             self._monitors = monitors
 
