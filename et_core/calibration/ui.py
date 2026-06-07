@@ -326,7 +326,8 @@ class MonitorCalibWindow(QWidget):
         self.setGeometry(mx, my, mw, mh)
         self.phase = "prep"
         self.phase_timer = 0.0
-        self.showFullScreen()
+        self.show()
+        self.raise_()
         self.timer.start()
 
     def paintEvent(self, event):
