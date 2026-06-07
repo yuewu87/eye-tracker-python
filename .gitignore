@@ -27,3 +27,7 @@ docs/
 
 # 数据备份
 数据备份/
+
+# Python cache
+__pycache__/
+*.pyc
