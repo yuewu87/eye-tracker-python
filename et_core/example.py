@@ -12,7 +12,6 @@ print(f"显示器: {tracker.monitors}")
 if not tracker.monitor_detector.is_calibrated and len(tracker.monitors) > 1:
     print("[i] 未找到显示器校准，运行多屏校准...")
     tracker.run_monitor_calibration()
-# 需要像素级视线坐标时手动调用: tracker.run_calibration()
 
 try:
     while True:
