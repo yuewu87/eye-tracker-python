@@ -1,10 +1,10 @@
-"""校准 UI — 可选子模块，依赖 PyQt5。"""
+"""校准 UI — 可选子模块，依赖 PySide6。"""
 
 import os
 import numpy as np
-from PyQt5.QtWidgets import QApplication, QWidget
-from PyQt5.QtCore import Qt, QTimer, QPoint, QEventLoop, pyqtSignal
-from PyQt5.QtGui import QPainter, QColor, QFont, QPen
+from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtCore import Qt, QTimer, QPoint, QEventLoop, Signal
+from PySide6.QtGui import QPainter, QColor, QFont, QPen
 
 from et_core.calibration.collector import CalibrationCollector
 from et_core.calibration.trainer import train, save, evaluate
@@ -27,7 +27,7 @@ PREP_SECONDS = 1.0
 class CalibrationWindow(QWidget):
     """全屏 7 点校准窗口，阻塞执行。"""
 
-    calibration_done = pyqtSignal()
+    calibration_done = Signal()
 
     def __init__(self, camera_processor, use_ir=False):
         super().__init__()
@@ -201,7 +201,7 @@ class CalibrationWindow(QWidget):
 class CenterCalibWindow(QWidget):
     """单点中心校准：注视屏幕中央 2.5 秒。"""
 
-    calibration_done = pyqtSignal()
+    calibration_done = Signal()
 
     def __init__(self, camera_processor, predictor):
         super().__init__()
@@ -292,14 +292,10 @@ class CenterCalibWindow(QWidget):
 class MonitorCalibWindow(QWidget):
     """多显示器校准：依次在每块屏幕上显示准星。"""
 
-    calibration_done = pyqtSignal()
+    calibration_done = Signal()
 
     def __init__(self, camera_processor, monitors: list):
-        print("[d] MonitorCalibWindow.__init__ 开始")
-        try:
-            super().__init__()
-        except Exception as e:
-            print(f"[!] super().__init__ 失败: {e}")
+        super().__init__()
         self.camera = camera_processor
         self.monitors = monitors
         print(f"[i] 显示器校准 — {len(monitors)} 块屏幕")
@@ -317,7 +313,6 @@ class MonitorCalibWindow(QWidget):
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
         self.timer.setInterval(33)
-        print("[d] 调用 _advance")
         self._advance()
 
     def _advance(self):

@@ -190,17 +190,17 @@ class EyeTracker:
 
     # ── 校准入口 ──────────────────────────────────────
 
-    def _ensure_qt_app(self):
-        import sys
-        from PyQt5.QtWidgets import QApplication
+    @staticmethod
+    def _ensure_qt_app():
+        from PySide6.QtWidgets import QApplication
         if QApplication.instance() is None:
-            return QApplication(sys.argv)
+            return QApplication()
 
     def run_calibration(self):
-        """阻塞运行 7 点校准。需要 PyQt5。"""
+        """阻塞运行 7 点校准。需要 PySide6。"""
         self._ensure_qt_app()
         from et_core.calibration.ui import CalibrationWindow
-        from PyQt5.QtCore import QEventLoop
+        from PySide6.QtCore import QEventLoop
 
         window = CalibrationWindow(self._camera)
         loop = QEventLoop()
@@ -209,10 +209,10 @@ class EyeTracker:
         self._load_calibration()
 
     def run_center_calibration(self):
-        """阻塞运行中心校准。需要 PyQt5。"""
+        """阻塞运行中心校准。需要 PySide6。"""
         self._ensure_qt_app()
         from et_core.calibration.ui import CenterCalibWindow
-        from PyQt5.QtCore import QEventLoop
+        from PySide6.QtCore import QEventLoop
 
         window = CenterCalibWindow(self._camera, self._predictor)
         loop = QEventLoop()
@@ -220,21 +220,15 @@ class EyeTracker:
         loop.exec()
 
     def run_monitor_calibration(self):
-        """阻塞运行多显示器校准。需要 PyQt5。"""
-        print("[d] run_monitor_calibration 开始")
+        """阻塞运行多显示器校准。需要 PySide6。"""
         self._ensure_qt_app()
-        print("[d] QApplication OK")
         from et_core.calibration.ui import MonitorCalibWindow
-        print("[d] import OK")
-        from PyQt5.QtCore import QEventLoop
+        from PySide6.QtCore import QEventLoop
 
-        print("[d] 创建窗口...")
         window = MonitorCalibWindow(self._camera, self._monitors)
-        print("[d] 窗口已创建，进入事件循环")
         loop = QEventLoop()
         window.calibration_done.connect(loop.quit)
         loop.exec()
-        print("[d] 事件循环结束")
         offsets = window.get_offsets()
         if offsets:
             self._monitor_detector.calibrate(offsets)
