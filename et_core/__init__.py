@@ -192,7 +192,8 @@ class EyeTracker:
 
     @staticmethod
     def _ensure_qt_app():
-        import sys
+        import os, sys
+        os.environ["QT_QPA_PLATFORM"] = "windows"
         from PyQt5.QtWidgets import QApplication
         app = QApplication.instance()
         if app is None:

@@ -316,14 +316,14 @@ class MonitorCalibWindow(QWidget):
         self._advance()
 
     def _advance(self):
-        """切换到下一块屏幕，窗口移到对应显示器。"""
         if self.current_idx >= 0 and self.current_idx < len(self.monitors):
-            self.collector.get_samples()  # 清空
+            self.collector.get_samples()
         self.current_idx += 1
         if self.current_idx >= len(self.monitors):
             self._finish()
             return
         mx, my, mw, mh = self.monitors[self.current_idx]
+        print(f"  [d] 屏幕 {self.current_idx + 1}: 窗口移到 ({mx}, {my}) {mw}x{mh}")
         self.setGeometry(mx, my, mw, mh)
         self.phase = "prep"
         self.phase_timer = 0.0
