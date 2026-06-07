@@ -56,9 +56,10 @@ class EyeTracker:
             ctypes.windll.user32.EnumDisplayMonitors(
                 None, None, MonitorEnumProc(_enum_callback), 0
             )
-            # 主屏排在第一，其余按 x 坐标排序
+            # 主屏第一，其余按离主屏距离排序（近的先）
             primary = next((m for m in raw if m[0] == 0 and m[1] == 0), raw[0])
-            others = sorted([m for m in raw if m != primary], key=lambda m: m[0])
+            others = sorted([m for m in raw if m != primary],
+                            key=lambda m: abs(m[0] - primary[0]))
             self._monitors = [primary] + others
         else:
             self._monitors = monitors

@@ -399,7 +399,9 @@ class MonitorCalibWindow(QWidget):
         if self._idx >= len(self.monitors):
             self.calibration_done.emit()
             return
-        label = f"屏幕 {self._idx + 1}/{len(self.monitors)}"
+        mx, my, mw, mh = self.monitors[self._idx]
+        orient = "竖屏" if mh > mw else "横屏"
+        label = f"屏幕 {self._idx + 1} ({mw}x{mh} {orient})"
         self._screen = _MonitorScreen(self.camera, self.monitors[self._idx], label)
         self._screen.done.connect(self._on_done)
 
