@@ -120,18 +120,40 @@ class EyeTracker:
         if not self._camera.open():
             raise RuntimeError("无法打开摄像头")
         self._load_calibration()
-        self._monitor_detector.load(self._monitor_calib_path)
+        self._load_monitor_calibration()
 
     def stop(self):
         self._camera.close()
 
+    @staticmethod
+    def _find_file(filename):
+        """在多个位置搜索文件：cwd → eye_tracker/ → et_core/"""
+        import os
+        for base in [os.getcwd(),
+                     os.path.join(os.getcwd(), "eye_tracker"),
+                     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")]:
+            path = os.path.join(base, filename)
+            if os.path.exists(path):
+                return path
+        return filename  # fallback 到 cwd
+
     def _load_calibration(self):
         import os
-        if os.path.exists(self._calib_path):
+        path = self._find_file(self._calib_path)
+        if os.path.exists(path):
             try:
-                self._predictor.load(self._calib_path)
-            except Exception:
-                pass
+                self._predictor.load(path)
+                print(f"[i] 加载校准: {path}")
+            except Exception as e:
+                print(f"[!] 校准加载失败: {e}")
+
+    def _load_monitor_calibration(self):
+        import os
+        path = self._find_file(self._monitor_calib_path)
+        if os.path.exists(path):
+            ok = self._monitor_detector.load(path)
+            if ok:
+                print(f"[i] 加载显示器校准: {path}")
 
     def set_smoothing(self, factor: float):
         self._kf.set_smoothness(max(0.0, min(1.0, factor)))
