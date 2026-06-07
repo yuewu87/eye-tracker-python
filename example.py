@@ -6,11 +6,16 @@ from et_core import EyeTracker
 tracker = EyeTracker()
 tracker.start()
 
-# 显示器标签
+# 显示器标签: 主屏 / 竖屏 / 横屏
 labels = {}
+counts = {"竖屏": 0, "横屏": 0}
 for i, (mx, my, mw, mh) in enumerate(tracker.monitors):
-    orient = "竖" if mh > mw else "横"
-    labels[i] = f"屏{i+1}({mw}x{mh}{orient})"
+    if i == 0:
+        labels[i] = "主屏"
+    else:
+        orient = "竖屏" if mh > mw else "横屏"
+        counts[orient] += 1
+        labels[i] = f"{orient}{counts[orient]}"
 print(f"主屏: {tracker.screen_w}x{tracker.screen_h}")
 print(f"显示器: {list(labels.values())}")
 
