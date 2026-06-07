@@ -69,7 +69,7 @@ class EyeTracker:
         self._predictor = GazePredictor(self.screen_w, self.screen_h)
         self._kf = KalmanFilter()
         self._iir = IIRFilter(alpha=0.7)
-        self._monitor_detector = MonitorDetector(hysteresis_frames=8)
+        self._monitor_detector = MonitorDetector(hysteresis_frames=4)
 
         # 校准路径（默认在 et_core 目录下）
         import os as _os

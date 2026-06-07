@@ -7,11 +7,12 @@ import os
 class MonitorDetector:
     """基于虹膜水平偏移最近邻 + 迟滞的多屏分类器。"""
 
-    def __init__(self, hysteresis_frames=8):
-        self._offsets = None       # list[float]，每屏参考偏移
+    def __init__(self, hysteresis_frames=4):
+        self._offsets = None
         self._hysteresis = hysteresis_frames
-        self._candidate = None      # 当前候选屏幕索引
+        self._candidate = None
         self._candidate_count = 0
+        self._last_confirmed = None  # 上次确认的索引
 
     @property
     def is_calibrated(self) -> bool:
@@ -22,7 +23,7 @@ class MonitorDetector:
         self._offsets = sorted(offsets)
 
     def classify(self, iris_h_offset: float) -> int | None:
-        """最近邻 + 迟滞：返回当前屏幕索引（0-based）。"""
+        """最近邻 + 迟滞 + 保持上次确认值。"""
         if not self.is_calibrated:
             return None
         dists = [abs(iris_h_offset - ref) for ref in self._offsets]
@@ -35,8 +36,9 @@ class MonitorDetector:
             self._candidate_count = 1
 
         if self._candidate_count >= self._hysteresis:
+            self._last_confirmed = self._candidate
             return self._candidate
-        return None
+        return self._last_confirmed  # 未达迟滞返回上次确认值
 
     def classify_immediate(self, iris_h_offset: float) -> int | None:
         """无迟滞分类，直接返回最近屏（用于调试）。"""
