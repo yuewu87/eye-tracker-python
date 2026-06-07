@@ -10,7 +10,7 @@ print(f"屏幕: {tracker.screen_w}x{tracker.screen_h}")
 print(f"显示器: {tracker.monitors}")
 
 # 无校准文件则自动运行
-if not os.path.exists("calibration.npz"):
+if not tracker.predictor.is_loaded:
     print("[i] 未找到校准文件，运行 7 点校准...")
     tracker.run_calibration()
 

@@ -191,7 +191,9 @@ class CalibrationWindow(QWidget):
 
         screen = QApplication.primaryScreen().geometry()
         fname = "calibration_ir.npz" if self.use_ir else "calibration.npz"
-        save_path = os.path.join(os.getcwd(), fname)
+        import et_core
+        pkg_dir = os.path.dirname(os.path.abspath(et_core.__file__))
+        save_path = os.path.join(pkg_dir, fname)
         save(save_path, model, x_mean, x_std, screen.width(), screen.height(), poly)
 
         evaluate(self.all_samples, model, x_mean, x_std, poly,

@@ -68,9 +68,11 @@ class EyeTracker:
         self._iir = IIRFilter(alpha=0.7)
         self._monitor_detector = MonitorDetector(hysteresis_frames=8)
 
-        # 校准路径
-        self._calib_path = calib_path or "calibration.npz"
-        self._monitor_calib_path = monitor_calib_path or "monitor_calib.npz"
+        # 校准路径（默认在 et_core 目录下）
+        import os as _os
+        _pkg_dir = _os.path.dirname(_os.path.abspath(__file__))
+        self._calib_path = calib_path or _os.path.join(_pkg_dir, "calibration.npz")
+        self._monitor_calib_path = monitor_calib_path or _os.path.join(_pkg_dir, "monitor_calib.npz")
 
         # 状态
         self._gaze_x = self.screen_w / 2.0
@@ -125,35 +127,21 @@ class EyeTracker:
     def stop(self):
         self._camera.close()
 
-    @staticmethod
-    def _find_file(filename):
-        """在多个位置搜索文件：cwd → eye_tracker/ → et_core/"""
-        import os
-        for base in [os.getcwd(),
-                     os.path.join(os.getcwd(), "eye_tracker"),
-                     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")]:
-            path = os.path.join(base, filename)
-            if os.path.exists(path):
-                return path
-        return filename  # fallback 到 cwd
-
     def _load_calibration(self):
         import os
-        path = self._find_file(self._calib_path)
-        if os.path.exists(path):
+        if os.path.exists(self._calib_path):
             try:
-                self._predictor.load(path)
-                print(f"[i] 加载校准: {path}")
+                self._predictor.load(self._calib_path)
+                print(f"[i] 加载校准: {self._calib_path}")
             except Exception as e:
                 print(f"[!] 校准加载失败: {e}")
 
     def _load_monitor_calibration(self):
         import os
-        path = self._find_file(self._monitor_calib_path)
-        if os.path.exists(path):
-            ok = self._monitor_detector.load(path)
+        if os.path.exists(self._monitor_calib_path):
+            ok = self._monitor_detector.load(self._monitor_calib_path)
             if ok:
-                print(f"[i] 加载显示器校准: {path}")
+                print(f"[i] 加载显示器校准: {self._monitor_calib_path}")
 
     def set_smoothing(self, factor: float):
         self._kf.set_smoothness(max(0.0, min(1.0, factor)))
