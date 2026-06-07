@@ -19,8 +19,8 @@ class MonitorDetector:
         return self._offsets is not None and len(self._offsets) > 0
 
     def calibrate(self, offsets: list[float]):
-        """存储每块屏幕的虹膜水平偏移参考值，保持输入顺序。"""
-        self._offsets = list(offsets)
+        """存储每块屏幕的虹膜水平偏移参考值。"""
+        self._offsets = sorted(offsets)
 
     def classify(self, iris_h_offset: float) -> int | None:
         """最近邻 + 迟滞 + 保持上次确认值。"""
