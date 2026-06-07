@@ -192,9 +192,10 @@ class EyeTracker:
 
     @staticmethod
     def _ensure_qt_app():
+        import sys
         from PyQt5.QtWidgets import QApplication
         if QApplication.instance() is None:
-            return QApplication([""])
+            return QApplication(sys.argv)
 
     def run_calibration(self):
         """阻塞运行 7 点校准。需要 PySide6。"""
