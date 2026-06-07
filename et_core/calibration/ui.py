@@ -295,7 +295,11 @@ class MonitorCalibWindow(QWidget):
     calibration_done = pyqtSignal()
 
     def __init__(self, camera_processor, monitors: list):
-        super().__init__()
+        print("[d] MonitorCalibWindow.__init__ 开始")
+        try:
+            super().__init__()
+        except Exception as e:
+            print(f"[!] super().__init__ 失败: {e}")
         self.camera = camera_processor
         self.monitors = monitors
         print(f"[i] 显示器校准 — {len(monitors)} 块屏幕")
@@ -313,6 +317,7 @@ class MonitorCalibWindow(QWidget):
         self.timer = QTimer()
         self.timer.timeout.connect(self._tick)
         self.timer.setInterval(33)
+        print("[d] 调用 _advance")
         self._advance()
 
     def _advance(self):
