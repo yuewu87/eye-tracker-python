@@ -194,8 +194,11 @@ class EyeTracker:
     def _ensure_qt_app():
         import sys
         from PyQt5.QtWidgets import QApplication
-        if QApplication.instance() is None:
-            return QApplication(sys.argv)
+        app = QApplication.instance()
+        if app is None:
+            app = QApplication(sys.argv)
+            print("[i] QApplication 已创建")
+        return app
 
     def run_calibration(self):
         """阻塞运行 7 点校准。需要 PySide6。"""
