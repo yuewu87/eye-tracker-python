@@ -129,16 +129,20 @@ class OverlayWindow(QWidget):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Capture 窗口 — OBS 窗口捕获用 (QMainWindow 确保可被枚举)
+# Capture 窗口 — OBS 窗口捕获用
 # ═══════════════════════════════════════════════════════════════════
 
-class CaptureWindow(QMainWindow):
+class CaptureWindow(QWidget):
     """供 OBS 窗口捕获的全屏黑底光圈窗口。"""
 
     def __init__(self, geo):
         super().__init__()
         self.setWindowTitle("Eye Tracker - Capture")
         self.setGeometry(geo)
+        self.setWindowFlags(
+            Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint
+        )
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setStyleSheet("background: #000000;")
         self._gx = geo.width() // 2
         self._gy = geo.height() // 2
@@ -147,11 +151,11 @@ class CaptureWindow(QMainWindow):
         self._pulse = 0.0
         self._tracking = False
         self.show()
-        self.lower()  # 置底，不挡游戏
 
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(self.rect(), QColor(0, 0, 0))
         if self._tracking:
             draw_glow(p, self._gx, self._gy, self._vx, self._vy, self._pulse)
 

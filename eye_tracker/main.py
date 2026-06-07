@@ -158,6 +158,7 @@ class App:
         screen_geo = self.app.primaryScreen().geometry()
         self.overlay = OverlayWindow(screen_geo)
         self.capture = CaptureWindow(screen_geo)
+        self.capture.lower()  # 置底，不挡游戏
         self.overlay.hide()
         self.overlay.show()
         self.engine.reset_position()
