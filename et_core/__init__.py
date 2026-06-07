@@ -190,19 +190,14 @@ class EyeTracker:
 
     # ── 校准入口 ──────────────────────────────────────
 
-    @staticmethod
-    def _ensure_qt_app():
-        import os, sys
-        os.environ["QT_QPA_PLATFORM"] = "windows"
+    def _ensure_qt_app(self):
+        import sys
         from PyQt5.QtWidgets import QApplication
-        app = QApplication.instance()
-        if app is None:
-            app = QApplication(sys.argv)
-            print("[i] QApplication 已创建")
-        return app
+        if QApplication.instance() is None:
+            return QApplication(sys.argv)
 
     def run_calibration(self):
-        """阻塞运行 7 点校准。需要 PySide6。"""
+        """阻塞运行 7 点校准。需要 PyQt5。"""
         self._ensure_qt_app()
         from et_core.calibration.ui import CalibrationWindow
         from PyQt5.QtCore import QEventLoop
@@ -214,7 +209,7 @@ class EyeTracker:
         self._load_calibration()
 
     def run_center_calibration(self):
-        """阻塞运行中心校准。需要 PySide6。"""
+        """阻塞运行中心校准。需要 PyQt5。"""
         self._ensure_qt_app()
         from et_core.calibration.ui import CenterCalibWindow
         from PyQt5.QtCore import QEventLoop
@@ -225,16 +220,39 @@ class EyeTracker:
         loop.exec()
 
     def run_monitor_calibration(self):
-        """阻塞运行多显示器校准。需要 PySide6。"""
-        self._ensure_qt_app()
-        from et_core.calibration.ui import MonitorCalibWindow
-        from PyQt5.QtCore import QEventLoop
+        """阻塞运行多显示器校准。纯命令行，不依赖 Qt。"""
+        import time
+        from et_core.calibration.collector import CalibrationCollector
 
-        window = MonitorCalibWindow(self._camera, self._monitors)
-        loop = QEventLoop()
-        window.calibration_done.connect(loop.quit)
-        loop.exec()
-        offsets = window.get_offsets()
+        if not self._monitors or len(self._monitors) < 2:
+            print("[!] 需要至少 2 块显示器")
+            return
+
+        offsets = []
+        for i, (mx, my, mw, mh) in enumerate(self._monitors):
+            print(f"\n  [屏幕 {i + 1}/{len(self._monitors)}] "
+                  f"请注视这块屏幕的正中央...")
+            for sec in [3, 2, 1]:
+                print(f"  {sec}...", end=" ", flush=True)
+                time.sleep(1)
+            print("采集中", end="", flush=True)
+
+            collector = CalibrationCollector(samples_needed=60, settle_seconds=0.0)
+            collector.start_point(0, 0)
+            while not collector.is_done:
+                feats = self._camera.process_frame()
+                if feats is not None:
+                    collector.feed_frame(feats)
+                    if collector._collected % 20 == 0:
+                        print(".", end="", flush=True)
+
+            samples = collector.get_samples()
+            iris_h_offsets = [(s[0][0] + s[0][2]) / 2 for s in samples]
+            avg_offset = float(np.mean(iris_h_offsets))
+            offsets.append(avg_offset)
+            print(f" 偏移={avg_offset:.4f}")
+
         if offsets:
             self._monitor_detector.calibrate(offsets)
             self._monitor_detector.save(self._monitor_calib_path)
+            print(f"[OK] 显示器校准已保存: {self._monitor_calib_path}")
