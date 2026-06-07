@@ -50,8 +50,14 @@ class CameraProcessor:
         self._cr_x1 = self._cr_y1 = 0
 
     def open(self) -> bool:
-        self.cap = cv2.VideoCapture(self._camera_id, cv2.CAP_DSHOW)
-        if not self.cap.isOpened():
+        # 先试指定摄像头，失败则从 0 开始兜底
+        for cid in [self._camera_id] + [i for i in range(4) if i != self._camera_id]:
+            cap = cv2.VideoCapture(cid, cv2.CAP_DSHOW)
+            if cap.isOpened():
+                self._camera_id = cid
+                self.cap = cap
+                break
+        else:
             return False
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
